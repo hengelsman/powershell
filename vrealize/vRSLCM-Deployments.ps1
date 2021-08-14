@@ -2,7 +2,7 @@
 #   Optional copy vidm and vra files to NFS share
 #
 # Henk Engelsman
-# 12 Aug 2021
+# 14 Aug 2021
 
 #################
 ### VARIABLES ###
@@ -43,8 +43,8 @@ $vraOva = $driveletter + ":\" + "ova\vra.ova"
 
 
 #connect to vCenter
-$viConnection = Connect-VIServer $vcenter -User $vcUser -Password $vcPassword -WarningAction SilentlyContinue
-$vmhost = get-cluster $cluster | Get-VMHost | Select -First 1
+Connect-VIServer $vcenter -User $vcUser -Password $vcPassword -WarningAction SilentlyContinue
+$vmhost = get-cluster $cluster | Get-VMHost | Select-Object -First 1
 
 #vRSLCM OVF Configuration Parameters
 $ovfconfig = Get-OvfConfiguration $vrslcmOva
