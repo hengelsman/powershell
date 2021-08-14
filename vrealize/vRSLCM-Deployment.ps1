@@ -3,32 +3,34 @@
 #
 # Henk Engelsman
 # 14 Aug 2021
+#
+# Import-Module VMware.PowerCLI #
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "<path to iso file>" #"C:\Temp\vra-lcm-installer-18067628.iso"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-18067628.iso" # "<path to iso file>"
 $copyOVA = $true #Select $true or $false to copy vra and vidm files to a NFS Share
-$nfsshare = "<path to NFS share>" #"\\192.168.1.10\data\iso\vRealize\vRA8\latest\"
+$nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
 #vcenter variables
-$vcenter = "<vcenter FQDN>" #vcsamgmt.infrajedi.local"
+$vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
 $vcUser = "administrator@vsphere.local"
-$vcPassword = "<password>"
+$vcPassword = "VMware01!" #vCenter password
 # General Configuration Parameters
 $cluster = "cls-mgmt"
 $network = "VMNet1"
-$datastore = "<Datastore Name>"
-$vrslcmIp = "<vRSLCM IP Address>"
+$datastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
+$vrslcmIp = "192.168.1.180" #vRSLCM IP Address
 $netmask = "<subnetmask>"
 $gateway = "<gateway>"
-$dns = "<dns1,dns2>" #DNS Servers, Comma separated "192.168.1.11,192.168.1.12"
-$domain = "<dns domain name>" # infrajedi.local
-$vrslcmVmname = "vrslcm" #vRSLCM VM Name
+$dns = "192.168.1.11,192.168.1.12" # DNS Servers, Comma separated
+$domain = "infrajedi.local" #dns domain name
+$vrslcmVmname = "bvrslcm" #vRSLCM VM Name
 $vrslcmHostname = $vrslcmVmname+"."+$domain #joins vmname and domain to generate fqdn
 $vrlscmPassword = "VMware01!" #Note this is the root password, not the admin@local password
-$ntp = "<ntpserver>"
-$vmFolder = "<vCenter VM Foldername>" #VM Foldername to place the vm
+$ntp = "192.168.1.1"
+$vmFolder = "<vCenter VM Foldername>" #VM Foldername to place the vm.
 
 
 #Mount the Iso and extract ova paths
