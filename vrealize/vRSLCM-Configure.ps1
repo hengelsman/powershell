@@ -4,7 +4,7 @@
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
-# Henk Engelsman
+# Henk Engelsman - https://www.vtam.nl
 # 14 Aug 2021
 #
 # Import-Module VMware.PowerCLI
@@ -32,6 +32,9 @@ $netmask = "255.255.255.0"
 $vrealizeLicense ="<your license here>"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 $defaultProductPassword = "VMware01!"
+
+#Comment the two lines below if just want to generate a cert from vRSLCM
+#Please also comment the scriptpart # Import existing certificate if you do so.
 $PublicCert = get-content "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCert = get-content "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 
@@ -39,7 +42,7 @@ $vCenterServer = "vcsamgmt.infrajedi.local"
 $vCenterAccount = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 
-$nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/vRA8/latest"
+$nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/vRA8/latest" #NFS location where vidm.ova and vra.ova are stored.
 $deployDatastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
@@ -54,9 +57,7 @@ $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
 
 
-#--------------------------------------------
 # Allow Selfsigned certificates in powershell
-#--------------------------------------------
 Function Unblock-SelfSignedCert() {
 if ([System.Net.ServicePointManager]::CertificatePolicy -notlike 'TrustAllCertsPolicy') {
     Add-Type -TypeDefinition @"
@@ -74,10 +75,11 @@ if ([System.Net.ServicePointManager]::CertificatePolicy -notlike 'TrustAllCertsP
     }
 }
 
-Unblock-SelfSignedCert #run function to unblock selfsigned certs
+Unblock-SelfSignedCert #run above function to unblock selfsigned certs
 
 #Use TLS 1.2 for REST calls
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+
 
 ############################################################################
 ### Change intial vRSLCM admin password and create authentication header ###
@@ -113,7 +115,6 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 ##############################################
 ### Connect to vCenter to get VM Folder Id ###
 ##############################################
-$deployVmFolderName = "vRealize-Beta"
 Connect-VIServer $vCenterServer -User $vCenterAccount -Password $vCenterPassword
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
@@ -206,7 +207,6 @@ $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Het is niet gelukt om vcenter $data.vCenterHost" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -228,7 +228,6 @@ $data = @(
 $ntpuri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $ntpuri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Failed to add NTP Server $ntp1" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -246,7 +245,6 @@ $data = @(
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Failed to add DNS Server $dns1" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -265,7 +263,6 @@ $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Failed to add DNS Server $dns2" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -309,7 +306,7 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
 $timer.Stop()
 Write-Host "Licence creation and validation Status" $response.state
 
-# Get ID of imported Licnse
+# Get ID of imported License
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/licenses/alias/$vrealizeLicenseAlias"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $licenseId = $response.vmid
@@ -343,6 +340,11 @@ try {
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
 }
+
+# Get ID of Generated Certificate
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=standardCertificate"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$certificateId = $response.certificates.vmid
 
 
 # Import existing certificate

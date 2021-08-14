@@ -1,7 +1,7 @@
-# Deploy vRSLCM
-#   Optional copy vidm and vra files to NFS share
+# Powershell Script to Deploy vRSLCM
+# Optionally copy vidm and vra files to configure NFS share
 #
-# Henk Engelsman
+# Henk Engelsman - https://www.vtam.nl
 # 14 Aug 2021
 #
 # Import-Module VMware.PowerCLI #
