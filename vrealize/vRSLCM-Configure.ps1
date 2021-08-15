@@ -5,7 +5,7 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 14 Aug 2021
+# 16 Aug 2021
 #
 # Import-Module VMware.PowerCLI
 
@@ -35,8 +35,9 @@ $defaultProductPassword = "VMware01!"
 
 #Comment the two lines below if just want to generate a cert from vRSLCM
 #Please also comment the scriptpart # Import existing certificate if you do so.
-$PublicCert = get-content "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
-$PrivateCert = get-content "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
+$importCert = $true
+$PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
+$PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 
 $vCenterServer = "vcsamgmt.infrajedi.local"
 $vCenterAccount = "administrator@vsphere.local"
@@ -167,9 +168,10 @@ try {
     break
 }
 $defaultProductPass_vmid = $response.vmid
-$defaultProductPass_alias = $response.alias
-$defaultProductPass_username = $response.userName
 $defaultProductPass="locker`:password`:$defaultProductPass_vmid`:default" ##note the escape character
+#$defaultProductPass_alias = $response.alias
+#$defaultProductPass_username = $response.userName
+
 
 
 #####################################
@@ -313,67 +315,68 @@ $licenseId = $response.vmid
 
 
 #######################################################
-### Generate new and/or import existing certificate ###
+### Import existing certificate or generate new one ###
 #######################################################
 
-#Generate new (wildcard) certificate. Formatted in JSON format
-$certificateData = "{
-    `"alias`": `"standardCertificate`",
-    `"cN`": `"vrealize.infrajedi.local`",
-    `"o`": `"infrajedi`",
-    `"oU`": `"local`",
-    `"c`": `"NL`",
-    `"sT`": `"ZH`",
-    `"l`": `"Rotterdam`",
-    `"size`": `"2048`",
-    `"validity`": `"1460`",
-    `"host`": [
-        `"*.infrajedi.local`"
-        ]
-}"
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates"
-try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData 
-} catch {
-    write-host "Failed to create Standard Certificate" -ForegroundColor red
-    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
-    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
-    break
-}
-
-# Get ID of Generated Certificate
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=standardCertificate"
-$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-$certificateId = $response.certificates.vmid
-
-
-# Import existing certificate
+# Import existing certificate if selected
 # Note the public certificate should have the complete chain.
 # All lines have to be joined together with \n in between and should end on \n
 # Rest of the body is Formatted in JSON format
-$FlatPrivateCert = ([string]::join("\n",($PrivateCert.Split("`n")))) + "\n"
-$FlatPublicCert = ([string]::join("\n",($PublicCert.Split("`n")))) + "\n"
-$certificateData = "{
-`"alias`": `"vRealizeWildcard`",
-`"certificateChain`": `"$FlatPublicCert`",
-`"passphrase`": `"`",
-`"privateKey`": `"$FlatPrivateCert`"
-}"
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
-try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
-} catch {
-    write-host "Failed to import Certificate" -ForegroundColor red
-    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
-    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
-    break
+if ($importCert -eq $true){
+    $PublicCert = get-content $PublicCertPath
+    $PrivateCert = get-content $PrivateCertPath
+    $FlatPrivateCert = ([string]::join("\n",($PrivateCert.Split("`n")))) + "\n"
+    $FlatPublicCert = ([string]::join("\n",($PublicCert.Split("`n")))) + "\n"
+    $certificateData = "{
+    `"alias`": `"vRealizeWildcard`",
+    `"certificateChain`": `"$FlatPublicCert`",
+    `"passphrase`": `"`",
+    `"privateKey`": `"$FlatPrivateCert`"
+    }"
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
+    } catch {
+        write-host "Failed to import Certificate" -ForegroundColor red
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        break
+    }
+
+    # Get ID of imported Certificate
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=vRealizeWildcard"
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $certificateId = $response.certificates.vmid
+} elseif ($importCert -eq $false) {
+    #Generate new (wildcard) certificate. Formatted in JSON format
+    $certificateData = "{
+        `"alias`": `"standardCertificate`",
+        `"cN`": `"vrealize.infrajedi.local`",
+        `"o`": `"infrajedi`",
+        `"oU`": `"local`",
+        `"c`": `"NL`",
+        `"sT`": `"ZH`",
+        `"l`": `"Rotterdam`",
+        `"size`": `"2048`",
+        `"validity`": `"1460`",
+        `"host`": [
+            `"*.infrajedi.local`"
+            ]
+    }"
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates"
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData 
+    } catch {
+        write-host "Failed to create Standard Certificate" -ForegroundColor red
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        break
+    }
+    # Get ID of Generated Certificate
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=standardCertificate"
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $certificateId = $response.certificates.vmid
 }
-
-# Get ID of imported Certificate
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=vRealizeWildcard"
-$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-$certificateId = $response.certificates.vmid
-
 
 #############################
 ### BINARY SOURCE MAPPING ###
