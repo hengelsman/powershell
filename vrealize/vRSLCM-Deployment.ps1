@@ -2,7 +2,7 @@
 # Optionally copy vidm and vra files to configure NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
-# 14 Aug 2021
+# 16 Aug 2021
 #
 # Import-Module VMware.PowerCLI #
 
@@ -22,15 +22,15 @@ $cluster = "cls-mgmt"
 $network = "VMNet1"
 $datastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
 $vrslcmIp = "192.168.1.180" #vRSLCM IP Address
-$netmask = "<subnetmask>"
-$gateway = "<gateway>"
-$dns = "192.168.1.11,192.168.1.12" # DNS Servers, Comma separated
+$netmask = "255.255.255.0"
+$gateway = "192.168.1.1"
+$dns = "192.168.1.204,192.168.1.205" # DNS Servers, Comma separated
 $domain = "infrajedi.local" #dns domain name
 $vrslcmVmname = "bvrslcm" #vRSLCM VM Name
 $vrslcmHostname = $vrslcmVmname+"."+$domain #joins vmname and domain to generate fqdn
 $vrlscmPassword = "VMware01!" #Note this is the root password, not the admin@local password
 $ntp = "192.168.1.1"
-$vmFolder = "<vCenter VM Foldername>" #VM Foldername to place the vm.
+$vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 
 
 #Mount the Iso and extract ova paths
