@@ -5,7 +5,7 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 16 Aug 2021
+# 19 Aug 2021
 #
 # Import-Module VMware.PowerCLI
 
@@ -52,10 +52,12 @@ $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
+$vidmVersion = "3.3.5"
 
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
+$vraVersion = "8.4.1"
 
 
 # Allow Selfsigned certificates in powershell
@@ -120,6 +122,20 @@ Connect-VIServer $vCenterServer -User $vCenterAccount -Password $vCenterPassword
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
+
+#Check if VIDM and VRA VMs already exists
+if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
+    Write-Host "Check if VM $vidmVmName exists"
+    Write-Host "VM with name $vidmVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
+    break
+} elseif (get-vm -Name $vraVmName -ErrorAction SilentlyContinue) {
+    Write-Host "Check if VM $vraVmName exists"
+    Write-Host "VM with name $vraVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
+    break
+} else {
+    Write-Host "VMs with names $vidmVmName and $vraVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
+}
+
 DisConnect-VIServer $vCenterServer -Confirm:$false
 
 
@@ -482,7 +498,7 @@ $vidmDeployJSON = "{
     `"products`": [
       {
         `"id`": `"vidm`",
-        `"version`": `"3.3.5`",
+        `"version`": `"$vidmVersion`",
         `"properties`": {
           `"vidmAdminPassword`": `"$defaultProductPass`",
           `"syncGroupMembers`": true,
@@ -590,7 +606,7 @@ $vraDeployJSON ="{
     `"products`": [
       {
         `"id`": `"vra`",
-        `"version`": `"8.4.1`",
+        `"version`": `"$vraVersion`",
         `"properties`": {
           `"certificate`": `"locker`:certificate`:$certificateId`:vRealizeWildcard`",
           `"productPassword`": `"$defaultProductPass`",
