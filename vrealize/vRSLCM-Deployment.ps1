@@ -2,7 +2,7 @@
 # Optionally copy vidm and vra files to configure NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
-# 16 Aug 2021
+# 16 Aug 2021 - 2
 #
 # Import-Module VMware.PowerCLI #
 
@@ -10,10 +10,11 @@
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-18067628.iso" # "<path to iso file>"
-$copyOVA = $true #Select $true or $false to copy vra and vidm files to a NFS Share
+$vrslcmIso = "C:\Temp\vra-lcm-installer-18488288.iso" # "<path to iso file>"
+$copyOVA = $false #Select $true to copy vra and vidm ova files to a NFS Share
 $nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
-#vcenter variables
+$createSnapshot = $false #Set to $true to create a snapshot after deployment
+# vCenter variables
 $vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
 $vcUser = "administrator@vsphere.local"
 $vcPassword = "VMware01!" #vCenter password
@@ -33,18 +34,18 @@ $ntp = "192.168.1.1"
 $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 
 
-#Mount the Iso and extract ova paths
+# Mount the Iso and extract ova paths
 $mountResult = Mount-DiskImage $vrslcmIso -PassThru
 $driveletter = ($mountResult | Get-Volume).DriveLetter
 $vrslcmOvaFileName = (Get-ChildItem ($driveletter + ":\" + "vrlcm\*.ova")).Name
 $vrslcmOva = $driveletter + ":\vrlcm\" + $vrslcmOvaFileName
 $vidmOva = $driveletter + ":\" + "ova\vidm.ova"
 $vraOva = $driveletter + ":\" + "ova\vra.ova"
-#Or Remark the above and configure the path to the vRLCM ova file below
+# Or Remark the above and configure the path to the vRLCM ova file below
 #$vrslcmOva = "D:\vrlcm\VMware-vLCM-Appliance-8.4.1.1-18067607_OVF10.ova"
 
 
-#connect to vCenter
+# Connect to vCenter
 Connect-VIServer $vcenter -User $vcUser -Password $vcPassword -WarningAction SilentlyContinue
 $vmhost = get-cluster $cluster | Get-VMHost | Select-Object -First 1
 
@@ -73,19 +74,34 @@ $ovfconfig.IpAssignment.IpProtocol.Value = "IPv4" #string["IPv4", "IPv6"]
 $ovfconfig.NetworkMapping.Network_1.Value = $network
 
 
-#Deploying vRSLCM OVA
+# Check if vRSCLM VM already exist
+if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
+    Write-Host "Check if VM $vrslcmVmName exists"
+    Write-Host "VM with name $vrslcmVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
+    break
+}
+else {
+    Write-Host "VM with name $$vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
+}
+
+
+# Deploy vRSLCM
 Write-Host "Start Deployment of VRSLCM"
 $vrslcmvm = Import-VApp -Source $vrslcmOva -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
 
-#Start vRSLCM VM
-Write-Host "Start VRSLCM VM"
-$vrslcmvm | Start-Vm -RunAsync | Out-Null
+# Create Snapshot if configured and start vRSLCM VM
 #Note the admin@local password defaults to "vmware"
+if ($createSnapshot -eq $true){
+    Write-Host "Create Pre Firstboot Snapshot"
+    New-Snapshot -VM $vrslcmVmname -Name "Pre Firstboot Snapshot"
+}
+Write-Host "Starting VRSLCM VM"
+$vrslcmvm | Start-Vm -RunAsync | Out-Null
 
-#Disconnect vCenter
+# Disconnect vCenter
 Disconnect-VIServer $vcenter -Confirm:$false
 
-#Copy OVA files to NFS Share if selected
+# Copy OVA files to NFS Share if selected
 if ($copyOVA -eq $true){
     Write-Host "VIDM and vRA OVA Files will be copied to $nfsshare"
     Start-BitsTransfer -source $vidmOva -Destination $nfsshare
@@ -95,5 +111,5 @@ elseif ($copyOVA -eq $false) {
     Write-Host "Skip copying VIDM and vRA OVA Files to NFS"
 }
 
-#Unmount ISO
+# Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null

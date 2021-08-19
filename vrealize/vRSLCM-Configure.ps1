@@ -5,7 +5,7 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 19 Aug 2021
+# 19 Aug 2021 - 2
 #
 # Import-Module VMware.PowerCLI
 
@@ -33,9 +33,7 @@ $vrealizeLicense ="<your license here>"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 $defaultProductPassword = "VMware01!"
 
-#Comment the two lines below if just want to generate a cert from vRSLCM
-#Please also comment the scriptpart # Import existing certificate if you do so.
-$importCert = $true
+$importCert = $false #Set to $true and configure the paths below to import your existing Certificates
 $PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 
@@ -52,12 +50,12 @@ $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.5"
+$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.4.1"
+$vraVersion = "8.5.0" # for example 8.4.0, 8.4.1, 8.4.2, 8.5.0
 
 
 # Allow Selfsigned certificates in powershell
@@ -123,7 +121,7 @@ $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
 
-#Check if VIDM and VRA VMs already exists
+#Check if VIDM and VRA VMs already exist
 if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
     Write-Host "Check if VM $vidmVmName exists"
     Write-Host "VM with name $vidmVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
@@ -135,7 +133,6 @@ if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
 } else {
     Write-Host "VMs with names $vidmVmName and $vraVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
 }
-
 DisConnect-VIServer $vCenterServer -Confirm:$false
 
 
@@ -166,7 +163,7 @@ $vc_username = $response.userName
 $vcPassword="locker`:password`:$vc_vmid`:$vc_alias" #note the escape character
 
 
-# create Default Installation account in Locker
+# Create Default Installation account in Locker
 $data=@{
     alias="default"
     password="$defaultProductPassword"
@@ -187,7 +184,6 @@ $defaultProductPass_vmid = $response.vmid
 $defaultProductPass="locker`:password`:$defaultProductPass_vmid`:default" ##note the escape character
 #$defaultProductPass_alias = $response.alias
 #$defaultProductPass_username = $response.userName
-
 
 
 #####################################
@@ -320,6 +316,10 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     #Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
     Write-Host "Licence creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED to add License key " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
 }
 $timer.Stop()
 Write-Host "Licence creation and validation Status" $response.state
@@ -449,6 +449,10 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Start-Sleep -Seconds 60
     Write-Host "Binary Mapping Import Status at " (get-date -format HH:mm) $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED import Binaries " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
 }
 $timer.Stop()
 Write-Host "Binary Mapping Import Status" $response.state
@@ -562,6 +566,10 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Start-Sleep -Seconds 60
     Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED to Deploy VIDM " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
 }
 $timer.Stop()
 Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state
@@ -655,6 +663,10 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Start-Sleep -Seconds 60
     Write-Host "vRA Deployment Status at " (get-date -format HH:mm) $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED to deploy vRA " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
 }
 $timer.Stop()
 Write-Host "vRA Deployment Status at " (get-date -format HH:mm) $response.state
