@@ -2,7 +2,7 @@
 # Optionally copy vidm and vra files to configure NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
-# 16 Aug 2021 - 2
+# 20 Aug 2021
 #
 # Import-Module VMware.PowerCLI #
 
@@ -13,7 +13,7 @@
 $vrslcmIso = "C:\Temp\vra-lcm-installer-18488288.iso" # "<path to iso file>"
 $copyOVA = $false #Select $true to copy vra and vidm ova files to a NFS Share
 $nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
-$createSnapshot = $false #Set to $true to create a snapshot after deployment
+$createSnapshot = $true #Set to $true to create a snapshot after deployment
 # vCenter variables
 $vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
 $vcUser = "administrator@vsphere.local"
@@ -37,10 +37,12 @@ $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 # Mount the Iso and extract ova paths
 $mountResult = Mount-DiskImage $vrslcmIso -PassThru
 $driveletter = ($mountResult | Get-Volume).DriveLetter
-$vrslcmOvaFileName = (Get-ChildItem ($driveletter + ":\" + "vrlcm\*.ova")).Name
-$vrslcmOva = $driveletter + ":\vrlcm\" + $vrslcmOvaFileName
-$vidmOva = $driveletter + ":\" + "ova\vidm.ova"
-$vraOva = $driveletter + ":\" + "ova\vra.ova"
+$vrslcmOva = (Get-ChildItem ($driveletter + ":\" + "vrlcm\*.ova")).Name
+$vrslcmOvaPath = $driveletter + ":\vrlcm\" + $vrslcmOvaFileName
+$vidmOva = "vidm.ova"
+$vidmOvaPath = $driveletter+":\ova\"+$vidmOva
+$vraOva = "vra.ova"
+$vraOvaPath = $driveletter+":\ova\"+$vraOva
 # Or Remark the above and configure the path to the vRLCM ova file below
 #$vrslcmOva = "D:\vrlcm\VMware-vLCM-Appliance-8.4.1.1-18067607_OVF10.ova"
 
@@ -75,7 +77,7 @@ $ovfconfig.NetworkMapping.Network_1.Value = $network
 
 
 # Check if vRSCLM VM already exist
-if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
+if (get-vm -Name $vrslcmVmName -ErrorAction SilentlyContinue){
     Write-Host "Check if VM $vrslcmVmName exists"
     Write-Host "VM with name $vrslcmVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
     break
@@ -87,7 +89,7 @@ else {
 
 # Deploy vRSLCM
 Write-Host "Start Deployment of VRSLCM"
-$vrslcmvm = Import-VApp -Source $vrslcmOva -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
+$vrslcmvm = Import-VApp -Source $vrslcmOvaPath -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
 
 # Create Snapshot if configured and start vRSLCM VM
 #Note the admin@local password defaults to "vmware"
@@ -101,15 +103,25 @@ $vrslcmvm | Start-Vm -RunAsync | Out-Null
 # Disconnect vCenter
 Disconnect-VIServer $vcenter -Confirm:$false
 
-# Copy OVA files to NFS Share if selected
+# Copy OVA files to NFS Share if selected. Existing files will be renamed.
 if ($copyOVA -eq $true){
-    Write-Host "VIDM and vRA OVA Files will be copied to $nfsshare"
-    Start-BitsTransfer -source $vidmOva -Destination $nfsshare
-    Start-BitsTransfer -source $vraOva -Destination $nfsshare
+    Write-Host "VIDM and vRA OVA Files will be copied to $nfsshare" -BackgroundColor Green -ForegroundColor black
+    If (Test-Path ("$nfsshare$vidmOva")){
+        Write-Host "VIDM ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
+        Move-Item ("$nfsshare$vidmOva") -Destination ("$nfsshare$vidmOva"+".bak") -Force
+        #Remove-Item "$nfsshare\vidm.ova"
+        Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     }
-elseif ($copyOVA -eq $false) {
-    Write-Host "Skip copying VIDM and vRA OVA Files to NFS"
+    If (Test-Path ("$nfsshare$vraOva")){
+        Write-Host "vRA ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
+        Move-Item ("$nfsshare$vraOva") -Destination ("$nfsshare$vraOva"+".bak") -Force
+        #Remove-Item "$nfsshare\vra.ova"
+        Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
+    }
 }
+    elseif ($copyOVA -eq $false) {
+    Write-Host "Skip copying VIDM and vRA OVA Files to NFS" -BackgroundColor Green -ForegroundColor black
+    }
 
 # Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null
