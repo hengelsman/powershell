@@ -10,7 +10,7 @@
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-18488288.iso" # "<path to iso file>"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-851_18627676.iso" # "<path to iso file>"
 $copyOVA = $false #Select $true to copy vra and vidm ova files to a NFS Share
 $nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
 $createSnapshot = $true #Set to $true to create a snapshot after deployment
@@ -38,13 +38,13 @@ $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 $mountResult = Mount-DiskImage $vrslcmIso -PassThru
 $driveletter = ($mountResult | Get-Volume).DriveLetter
 $vrslcmOva = (Get-ChildItem ($driveletter + ":\" + "vrlcm\*.ova")).Name
-$vrslcmOvaPath = $driveletter + ":\vrlcm\" + $vrslcmOvaFileName
+$vrslcmOvaPath = $driveletter + ":\vrlcm\" + $vrslcmOva
 $vidmOva = "vidm.ova"
 $vidmOvaPath = $driveletter+":\ova\"+$vidmOva
 $vraOva = "vra.ova"
 $vraOvaPath = $driveletter+":\ova\"+$vraOva
 # Or Remark the above and configure the path to the vRLCM ova file below
-#$vrslcmOva = "D:\vrlcm\VMware-vLCM-Appliance-8.4.1.1-18067607_OVF10.ova"
+#$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.4.1.1-18627606_OVF10.ova"
 
 
 # Connect to vCenter
@@ -52,7 +52,7 @@ Connect-VIServer $vcenter -User $vcUser -Password $vcPassword -WarningAction Sil
 $vmhost = get-cluster $cluster | Get-VMHost | Select-Object -First 1
 
 #vRSLCM OVF Configuration Parameters
-$ovfconfig = Get-OvfConfiguration $vrslcmOva
+$ovfconfig = Get-OvfConfiguration $vrslcmOvaPath
 $ovfconfig.Common.vami.hostname.Value = $vrslcmHostname
 $ovfconfig.Common.varoot_password.Value = $vrlscmPassword
 $ovfconfig.Common.va_ssh_enabled.Value = $true
@@ -83,7 +83,7 @@ if (get-vm -Name $vrslcmVmName -ErrorAction SilentlyContinue){
     break
 }
 else {
-    Write-Host "VM with name $$vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
+    Write-Host "VM with name $vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
 }
 
 
