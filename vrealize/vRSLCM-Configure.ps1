@@ -5,7 +5,7 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 19 Aug 2021 - 2
+# 18 Sept 2021
 #
 # Import-Module VMware.PowerCLI
 
@@ -29,7 +29,7 @@ $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
 
-$vrealizeLicense ="<your license here>"
+$vrealizeLicense ="LICENSEKEY"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 $defaultProductPassword = "VMware01!"
 
@@ -55,7 +55,7 @@ $vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.5.0" # for example 8.4.0, 8.4.1, 8.4.2, 8.5.0
+$vraVersion = "8.5.1" # for example 8.4.0, 8.4.1, 8.4.2, 8.5.0, 8.5.1
 
 
 # Allow Selfsigned certificates in powershell
