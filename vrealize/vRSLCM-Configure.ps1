@@ -5,7 +5,7 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 18 Sept 2021
+# 27 Sept 2021
 #
 # Import-Module VMware.PowerCLI
 
@@ -55,7 +55,7 @@ $vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.5.1" # for example 8.4.0, 8.4.1, 8.4.2, 8.5.0, 8.5.1
+$vraVersion = "8.6.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 
 # Allow Selfsigned certificates in powershell
@@ -100,7 +100,7 @@ $data=@{
 $uri =  "https://$vrslcmHostname/lcm/authzn/api/firstboot/updatepassword"
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
-#Create new Login
+#Login to vRSLCM with new password
 #Build Header, including authentication
 $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUser,$vrlscmPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
@@ -222,7 +222,7 @@ $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
-    write-host "Het is niet gelukt om vcenter $data.vCenterHost" -ForegroundColor red
+    write-host "Failed to add vCenter $data.vCenterHost" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
@@ -309,10 +309,10 @@ $licenseRequestId = $response.requestId
 # Check License Creation Request
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$licenseRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-$Timeout = 60
+$Timeout = 180
 $timer = [Diagnostics.Stopwatch]::StartNew()
 while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
-    Start-Sleep -Seconds 1
+    Start-Sleep -Seconds 3
     #Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
     Write-Host "Licence creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
