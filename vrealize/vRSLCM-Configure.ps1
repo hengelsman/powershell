@@ -5,8 +5,11 @@
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 27 Sept 2021
-#
+# 21 Oct 2021
+# - Use of native json over powershell formatted json
+# - Import license from file
+# - dns/ntp bugfix
+# - renamed some variables
 # Import-Module VMware.PowerCLI
 
 #################
@@ -15,9 +18,10 @@
 $vrslcmVmname = "bvrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
-$vrslcmUser = "admin@local" #the default admin account for vRSLCM web interface
+$vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
 $vrlscmPassword = "VMware01!" #the NEW admin@local password to set
-$vrslcmDefaultAccount = "configadmin" 
+$vrslcmDefaultAccount = "configadmin"
+$vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam, South Holland, NL"
@@ -29,16 +33,19 @@ $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
 
-$vrealizeLicense ="LICENSEKEY"
+$vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
-$defaultProductPassword = "VMware01!"
 
-$importCert = $false #Set to $true and configure the paths below to import your existing Certificates
+# Set $importCert to $true to import your pre generated certs.
+# Configure the paths below to import your existing Certificates
+# If $false is selected, a wildcard certificate will be generated in vRSLCM
+$importCert = $true
 $PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
+$CertificateAlias = "vRealizeCertificate"
 
 $vCenterServer = "vcsamgmt.infrajedi.local"
-$vCenterAccount = "administrator@vsphere.local"
+$vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 
 $nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/vRA8/latest" #NFS location where vidm.ova and vra.ova are stored.
@@ -55,7 +62,7 @@ $vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.6.1" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 
 # Allow Selfsigned certificates in powershell
@@ -87,13 +94,13 @@ Unblock-SelfSignedCert #run above function to unblock selfsigned certs
 ############################################################################
 
 #Change initial / default password
-$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUser,"vmware")))
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,"vmware")))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
 $header.add("Authorization", "Basic $base64AuthInfo")
 $data=@{
-    "username" = "$vrslcmUser"
+    "username" = "$vrslcmUsername"
     "password" = "$vrlscmPassword"
 }| ConvertTo-Json
 
@@ -102,7 +109,7 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
 #Login to vRSLCM with new password
 #Build Header, including authentication
-$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUser,$vrlscmPassword)))
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrlscmPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
@@ -116,7 +123,7 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 ##############################################
 ### Connect to vCenter to get VM Folder Id ###
 ##############################################
-Connect-VIServer $vCenterServer -User $vCenterAccount -Password $vCenterPassword
+Connect-VIServer $vCenterServer -User $vcenterUsername -Password $vCenterPassword
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
@@ -131,7 +138,7 @@ if (get-vm -Name $vidmVmName -ErrorAction SilentlyContinue){
     Write-Host "VM with name $vraVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
     break
 } else {
-    Write-Host "VMs with names $vidmVmName and $vraVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
+    Write-Host "VMs with names $vidmVmName and $vraVmName not found, Deployment will continue..." -ForegroundColor Black -BackgroundColor Green
 }
 DisConnect-VIServer $vCenterServer -Confirm:$false
 
@@ -141,16 +148,17 @@ DisConnect-VIServer $vCenterServer -Confirm:$false
 ##############################
 
 # Create vCenter account in Locker
-$data=@{
-    alias="$vCenterServer"
-    password="$vCenterPassword"
-    passwordDescription="vCenter vcsamgmt admin password"
-    userName="$vCenterAccount"
-  }| ConvertTo-Json
+$data=@"
+{
+    "alias" : "$vCenterServer",
+    "password" : "$vCenterPassword",
+    "passwordDescription" : "vCenter Admin password",
+    "userName" : "$vcenterUsername"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Failed to add $data.passwordDescription to Locker" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -158,18 +166,17 @@ try {
     break
 }
 $vc_vmid = $response.vmid
-$vc_alias = $response.alias
-$vc_username = $response.userName
-$vcPassword="locker`:password`:$vc_vmid`:$vc_alias" #note the escape character
-
+$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterServer" #note the escape characters
 
 # Create Default Installation account in Locker
-$data=@{
-    alias="default"
-    password="$defaultProductPassword"
-    passwordDescription="Default Product Password"
-    userName="root"
-  } | ConvertTo-Json
+$data=@"
+{
+    "alias" : "default",
+    "password" : "$vrslcmDefaultAccountPassword",
+    "passwordDescription" : "Default Product Password",
+    "userName" : "root"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
@@ -180,10 +187,8 @@ try {
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
 }
-$defaultProductPass_vmid = $response.vmid
-$defaultProductPass="locker`:password`:$defaultProductPass_vmid`:default" ##note the escape character
-#$defaultProductPass_alias = $response.alias
-#$defaultProductPass_username = $response.userName
+$dp_vmid = $response.vmid
+$defaultPasswordLockerEntry="locker`:password`:$dp_vmid`:default" ##note the escape characters
 
 
 #####################################
@@ -192,10 +197,12 @@ $defaultProductPass="locker`:password`:$defaultProductPass_vmid`:default" ##note
 
 # Create Datacenter
 $dcuri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters"
-$data =@{
-    dataCenterName="$vrslcmDcName"
-    primaryLocation="$vrslcmDcLocation"
-} | ConvertTo-Json
+$data =@"
+{
+    "dataCenterName" : "$vrslcmDcName",
+    "primaryLocation" : "$vrslcmDcLocation"
+}
+"@
 
 try {
     $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data 
@@ -208,17 +215,36 @@ try {
 }
 $dc_vmid = $response.dataCenterVmid
 
+# Check Datacenter Creation Request
+$datacenterRequestId = $response.requestId
+$uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$datacenterRequestId"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$Timeout = 180
+$timer = [Diagnostics.Stopwatch]::StartNew()
+while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+    Start-Sleep -Seconds 3
+    #Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
+    Write-Host "Datacenter creation and validation Status" $response.state
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED to create Datacenter $vrslcmDcName at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
+}
+$timer.Stop()
+Write-Host "Datacenter creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 # Create vCenter
-$data=@{
-    vCenterHost="$vCenterServer"
-    vCenterName="$vCenterServer"
-    vcPassword="locker`:password`:$vc_vmid`:$vc_alias" #note the escape characters
-    vcUsedAs="MANAGEMENT_AND_WORKLOAD"
-    vcUsername="$vc_username"
-  } | ConvertTo-Json
+$data=@"
+{
+    "vCenterHost" : "$vCenterServer",
+    "vCenterName" : "$vCenterServer",
+    "vcPassword" : "$vCenterPassword",
+    "vcUsedAs" : "MANAGEMENT_AND_WORKLOAD",
+    "vcUsername" : "$vcenterUsername"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
-
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -228,20 +254,40 @@ try {
     break
 }
 
+# Check vCenter Creation Request
+$vCenterRequestId = $response.requestId
+$uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vCenterRequestId"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$Timeout = 180
+$timer = [Diagnostics.Stopwatch]::StartNew()
+while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+    Start-Sleep -Seconds 3
+    #Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
+    Write-Host "vCenter creation and validation Status" $response.state
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED to add vCenter $vCenterServer at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
+}
+$timer.Stop()
+Write-Host "vCenter creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
+
+
 ###############################
 ### ADD DNS AND NTP SERVERS ###
 ###############################
 
 # Add NTP Server
-$data = @(
-    @{
-        name="ntp01"
-        hostName=$ntp1
-    }
-) | ConvertTo-Json
-$ntpuri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
+$data = @"
+{
+    "name" : "ntp01",
+    "hostName" : "$ntp1"
+}
+"@
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $ntpuri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
     write-host "Failed to add NTP Server $ntp1" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -250,12 +296,12 @@ try {
 }
 
 # Add DNS Server 1
-$data = @(
-    @{
-        name="dns01"
-        hostName=$dns1
-    }
-) | ConvertTo-Json
+$data = @"
+{
+    "name" : "dns01",
+    "hostName" : "$dns1"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
@@ -267,12 +313,12 @@ try {
 }
 
 # Add DNS Server 2
-$data = @(
-    @{
-        name="dns02";
-        hostName=$dns2
-    }
-) | ConvertTo-Json
+$data = @"
+{
+    "name" : "dns02",
+    "hostName" : "$dns2"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 
 try {
@@ -288,23 +334,23 @@ try {
 ##################################
 ### Add vRealize Suite License ###
 ##################################
-$data=@{
-    alias="$vrealizeLicenseAlias"
-    description="vRealize Suite 2019 License"
-    serialKey="$vrealizeLicense"
-  } | ConvertTo-Json
+$data=@"
+{
+    "alias" : "$vrealizeLicenseAlias",
+    "description" : "vRealize Suite 2019 License",
+    "serialKey" : "$vrealizeLicense"
+}
+"@
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/license/validate-and-add"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
-    write-host "Failed to add License $data.alias to Locker" -ForegroundColor red
+    write-host "Failed to add License $vrealizeLicenseAlias to Locker" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
 }
-
 $licenseRequestId = $response.requestId
-# $licenseId = $response.vmid #This is not the licenseId required for JSON Input
 
 # Check License Creation Request
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$licenseRequestId"
@@ -312,23 +358,23 @@ $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
 $timer = [Diagnostics.Stopwatch]::StartNew()
 while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 5
     #Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
     Write-Host "Licence creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     if ($response.state -eq "FAILED"){
-        Write-Host "FAILED to add License key " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Write-Host "FAILED to add License key $vrealizeLicense at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
         Break
     }
 }
 $timer.Stop()
-Write-Host "Licence creation and validation Status" $response.state
+Write-Host "Licence creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 # Get ID of imported License
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/licenses/alias/$vrealizeLicenseAlias"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $licenseId = $response.vmid
-
+$defaultLicenseLockerEntry="locker`:license`:$licenseId`:$vrealizeLicenseAlias" ##note the escape character
 
 #######################################################
 ### Import existing certificate or generate new one ###
@@ -343,91 +389,105 @@ if ($importCert -eq $true){
     $PrivateCert = get-content $PrivateCertPath
     $FlatPrivateCert = ([string]::join("\n",($PrivateCert.Split("`n")))) + "\n"
     $FlatPublicCert = ([string]::join("\n",($PublicCert.Split("`n")))) + "\n"
-    $certificateData = "{
-    `"alias`": `"vRealizeWildcard`",
-    `"certificateChain`": `"$FlatPublicCert`",
-    `"passphrase`": `"`",
-    `"privateKey`": `"$FlatPrivateCert`"
-    }"
+    $certificateData=@"
+    {
+        "alias": "$CertificateAlias",
+        "certificateChain" : "$FlatPublicCert",
+        "passphrase" : "",
+        "privateKey" : "$FlatPrivateCert"
+    }
+"@
+
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
     } catch {
-        write-host "Failed to import Certificate" -ForegroundColor red
+        write-host "Failed to import Certificate $CertificateAlias" -ForegroundColor red
         Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
         Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
         break
     }
 
     # Get ID of imported Certificate
-    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=vRealizeWildcard"
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=$CertificateAlias"
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     $certificateId = $response.certificates.vmid
-} elseif ($importCert -eq $false) {
+}
+elseif ($importCert -eq $false) {
     #Generate new (wildcard) certificate. Formatted in JSON format
-    $certificateData = "{
-        `"alias`": `"standardCertificate`",
-        `"cN`": `"vrealize.infrajedi.local`",
-        `"o`": `"infrajedi`",
-        `"oU`": `"local`",
-        `"c`": `"NL`",
-        `"sT`": `"ZH`",
-        `"l`": `"Rotterdam`",
-        `"size`": `"2048`",
-        `"validity`": `"1460`",
-        `"host`": [
-            `"*.infrajedi.local`"
-            ]
-    }"
+    #prep cert inputs derived from $domain and $vrslcmDcLocation variables
+    $certo = $domain.Split(".")[0]
+    $certoU = $domain.Split(".")[1]
+    $certi = ($vrslcmDcLocation.Split(",")[0]).trim()
+    $certst = ($vrslcmDcLocation.Split(",")[1]).trim()
+    $certc = ($vrslcmDcLocation.Split(",")[2]).trim()
+
+    $certificateData = @"
+    {
+        "alias": "$CertificateAlias",
+        "cN": "vrealize.$domain",
+        "o": "$certo",
+        "oU": "$certoU",
+        "c": "$certc",
+        "sT": "$certst",
+        "l": "$certi",
+        "size": "2048",
+        "validity": "1460",
+        "host": [
+            "*.$domain"
+        ]
+    }
+"@
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates"
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData 
     } catch {
-        write-host "Failed to create Standard Certificate" -ForegroundColor red
+        write-host "Failed to create Standard Certificate $CertificateAlias" -ForegroundColor red
         Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
         Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
         break
     }
     # Get ID of Generated Certificate
-    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=standardCertificate"
+    $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=$CertificateAlias"
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     $certificateId = $response.certificates.vmid
-}
+    }
+$CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias" ##note the escape character
+
 
 #############################
 ### BINARY SOURCE MAPPING ###
 #############################
 
 # Get all Product Binaries from NFS location
-$data=@{
-    sourceLocation="$nfsSourceLocation"
-    sourceType="NFS"
-  } | ConvertTo-Json
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
-try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-} catch {
-    write-host "Failed to add NFS Repository $nfsSourceLocation" -ForegroundColor red
-    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
-    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
-    break
+$data=@"
+{
+  "sourceLocation" : "$nfsSourceLocation",
+  "sourceType" : "NFS"
 }
+"@
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
+$response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+$response
 
 #To Do: Check if files exist or error out before starting import Request.
 
 # Import VIDM and vRA binaries from NFS location
-$data = @(
-    @{
-        filePath="/data/nfsfiles/vidm.ova"
-        name="vidm.ova"
-        type="install"
+$data = @"
+[
+    {
+        "filePath":  "/data/nfsfiles/vidm.ova",
+        "name":  "vidm.ova",
+        "type":  "install"
     },
-    @{
-        filePath="/data/nfsfiles/vra.ova"
-        name="vra.ova"
-        type="install"
+    {
+        "filePath":  "/data/nfsfiles/vra.ova",
+        "name":  "vra.ova",
+        "type":  "install"
     }
-) | ConvertTo-Json
+]
+"@
+
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/download"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
@@ -455,7 +515,7 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     }
 }
 $timer.Stop()
-Write-Host "Binary Mapping Import Status" $response.state
+Write-Host "Binary Mapping Import Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 
 
@@ -466,86 +526,89 @@ Write-Host "Binary Mapping Import Status" $response.state
 ###################
 ### DEPLOY VIDM ###
 ###################
-$vidmDeployJSON = "{
-    `"environmentName`": `"globalenvironment`",
-    `"infrastructure`": {
-      `"properties`": {
-        `"dataCenterVmid`": `"$dc_vmId`",
-        `"regionName`": `"default`",
-        `"zoneName`": `"default`",
-        `"vCenterName`": `"$vCenterServer`",
-        `"vCenterHost`": `"$vCenterServer`",
-        `"vcUsername`": `"$vCenterAccount`",
-        `"vcPassword`": `"$vcPassword`",
-        `"acceptEULA`": `"true`",
-        `"enableTelemetry`": `"false`",
-        `"adminEmail`": `"$vrslcmAdminEmail`",
-        `"defaultPassword`": `"$defaultProductPass`",
-        `"certificate`": `"locker`:certificate`:$certificateId`:vRealizeWildcard`",
-        `"cluster`": `"$deployCluster`",
-        `"storage`": `"$deployDatastore`",
-        `"folderName`": `"$deployVmFolderId`",
-        `"resourcePool`": `"`",
-        `"diskMode`": `"thin`",
-        `"network`": `"VMNet1`",
-        `"masterVidmEnabled`": `"false`",
-        `"dns`": `"$ntp1`",
-        `"domain`": `"$domain`",
-        `"gateway`": `"$gateway`",
-        `"netmask`": `"$netmask`",
-        `"searchpath`": `"$domain`",
-        `"timeSyncMode`": `"ntp`",
-        `"ntp`": `"$ntp1`",
-        `"isDhcp`": `"false`"
+$vidmDeployJSON=@"
+{
+    "environmentName": "globalenvironment",
+    "infrastructure": {
+      "properties": {
+        "dataCenterVmid": "$dc_vmId",
+        "regionName": "default",
+        "zoneName": "default",
+        "vCenterName": "$vCenterServer",
+        "vCenterHost": "$vCenterServer",
+        "vcUsername": "$vcenterUsername",
+        "vcPassword": "$vcPasswordLockerEntry",
+        "acceptEULA": "true",
+        "enableTelemetry": "false",
+        "adminEmail": "$vrslcmAdminEmail",
+        "defaultPassword": "$defaultPasswordLockerEntry",
+        "certificate": "$CertificateLockerEntry",
+        "cluster": "$deployCluster",
+        "storage": "$deployDatastore",
+        "folderName": "$deployVmFolderId",
+        "resourcePool": "",
+        "diskMode": "thin",
+        "network": "VMNet1",
+        "masterVidmEnabled": "false",
+        "dns": "$dns1",
+        "domain": "$domain",
+        "gateway": "$gateway",
+        "netmask": "$netmask",
+        "searchpath": "$domain",
+        "timeSyncMode": "ntp",
+        "ntp": "$ntp1",
+        "isDhcp": "false"
       }
     },
-    `"products`": [
+    "products": [
       {
-        `"id`": `"vidm`",
-        `"version`": `"$vidmVersion`",
-        `"properties`": {
-          `"vidmAdminPassword`": `"$defaultProductPass`",
-          `"syncGroupMembers`": true,
-          `"defaultConfigurationUsername`": `"$vrslcmDefaultAccount`",
-          `"defaultConfigurationEmail`": `"$vrslcmAdminEmail`",
-          `"defaultConfigurationPassword`": `"$defaultProductPass`",
-          `"certificate`": `"locker`:certificate`:$certificateId`:vRealizeWildcard`",
-          `"fipsMode`": `"false`",
-          `"nodeSize`": `"medium`"
+        "id": "vidm",
+        "version": "$vidmVersion",
+        "properties": {
+          "vidmAdminPassword": "$defaultPasswordLockerEntry",
+          "syncGroupMembers": true,
+          "defaultConfigurationUsername": "$vrslcmDefaultAccount",
+          "defaultConfigurationEmail": "$vrslcmAdminEmail",
+          "defaultConfigurationPassword": "$defaultPasswordLockerEntry",
+          "certificate": "$CertificateLockerEntry",
+          "fipsMode": "false",
+          "nodeSize": "medium"
         },
-        `"clusterVIP`": {
-          `"clusterVips`": []
+        "clusterVIP": {
+          "clusterVips": []
         },
-        `"nodes`": [
+        "nodes": [
           {
-            `"type`": `"vidm-primary`",
-            `"properties`": {
-              `"vmName`": `"$vidmVmName`",
-              `"hostName`": `"$vidmHostname`",
-              `"ip`": `"$vidmIp`",
-              `"gateway`": `"$gateway`",
-              `"domain`": `"$domain`",
-              `"searchpath`": `"$domain`",
-              `"dns`": `"$dns1`",
-              `"netmask`": `"$netmask`",
-              `"contentLibraryItemId`": `"`",
-              `"vCenterHost`": `"$vCenterServer`",
-              `"cluster`": `"$deployCluster`",
-              `"resourcePool`": `"`",
-              `"network`": `"$deployNetwork`",
-              `"storage`": `"$deployDatastore`",
-              `"diskMode`": `"thin`",
-              `"vCenterName`": `"$vCenterServer`",
-              `"vcUsername`": `"$vCenterAccount`",
-              `"vcPassword`": `"$vcPassword`"
+            "type": "vidm-primary",
+            "properties": {
+              "vmName": "$vidmVmName",
+              "hostName": "$vidmHostname",
+              "ip": "$vidmIp",
+              "gateway": "$gateway",
+              "domain": "$domain",
+              "searchpath": "$domain",
+              "dns": "$dns1",
+              "netmask": "$netmask",
+              "contentLibraryItemId": "",
+              "vCenterHost": "$vCenterServer",
+              "cluster": "$deployCluster",
+              "resourcePool": "",
+              "network": "$deployNetwork",
+              "storage": "$deployDatastore",
+              "diskMode": "thin",
+              "vCenterName": "$vCenterServer",
+              "vcUsername": "$vcenterUsername",
+              "vcPassword": "$vcPasswordLockerEntry"
             }
           }
         ]
       }
     ]
-  }"
- $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
- try {
+  }
+"@
+
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
+  try {
      $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vidmDeployJSON
  } catch {
      write-host "Failed to create Global Environment" -ForegroundColor red
@@ -572,76 +635,78 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     }
 }
 $timer.Stop()
-Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state
+Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
 
 
 ##################
 ### DEPLOY VRA ###
 ##################
 Write-Host "Starting vRA Deployment"
-$vraDeployJSON ="{
-    `"environmentName`": `"$vrslcmProdEnv`",
-    `"infrastructure`": {
-      `"properties`": {
-        `"dataCenterVmid`": `"$dc_vmId`",
-        `"regionName`":`"`",
-        `"zoneName`":`"`",
-        `"vCenterName`": `"$vCenterServer`",
-        `"vCenterHost`": `"$vCenterServer`",
-        `"vcUsername`": `"$vCenterAccount`",
-        `"vcPassword`": `"$vcPassword`",
-        `"acceptEULA`": `"true`",
-        `"enableTelemetry`": `"false`",
-        `"defaultPassword`": `"$defaultProductPass`",
-        `"certificate`": `"locker`:certificate`:$certificateId`:vRealizeWildcard`",
-        `"cluster`": `"$deployCluster`",
-        `"storage`": `"$deployDatastore`",
-        `"resourcePool`": `"`",
-        `"diskMode`": `"thin`",
-        `"network`": `"$deployNetwork`",
-        `"folderName`": `"$deployVmFolderId`",
-        `"masterVidmEnabled`": `"false`",
-        `"dns`": `"$dns1`",
-        `"domain`": `"$domain`",
-        `"gateway`": `"$gateway`",
-        `"netmask`": `"$netmask`",
-        `"searchpath`": `"$domain`",
-        `"timeSyncMode`": `"ntp`",
-        `"ntp`": `"$ntp1`",
-        `"isDhcp`": `"false`"
+$vraDeployJSON =@"
+{
+    "environmentName": "$vrslcmProdEnv",
+    "infrastructure": {
+      "properties": {
+        "dataCenterVmid": "$dc_vmId",
+        "regionName":"",
+        "zoneName":"",
+        "vCenterName": "$vCenterServer",
+        "vCenterHost": "$vCenterServer",
+        "vcUsername": "$vcenterUsername",
+        "vcPassword": "$vcPasswordLockerEntry",
+        "acceptEULA": "true",
+        "enableTelemetry": "false",
+        "defaultPassword": "$defaultPasswordLockerEntry",
+        "certificate": "$CertificateLockerEntry",
+        "cluster": "$deployCluster",
+        "storage": "$deployDatastore",
+        "resourcePool": "",
+        "diskMode": "thin",
+        "network": "$deployNetwork",
+        "folderName": "$deployVmFolderId",
+        "masterVidmEnabled": "false",
+        "dns": "$dns1",
+        "domain": "$domain",
+        "gateway": "$gateway",
+        "netmask": "$netmask",
+        "searchpath": "$domain",
+        "timeSyncMode": "ntp",
+        "ntp": "$ntp1",
+        "isDhcp": "false"
       }
     },
-    `"products`": [
+    "products": [
       {
-        `"id`": `"vra`",
-        `"version`": `"$vraVersion`",
-        `"properties`": {
-          `"certificate`": `"locker`:certificate`:$certificateId`:vRealizeWildcard`",
-          `"productPassword`": `"$defaultProductPass`",
-          `"licenseRef`": `"locker`:license`:$licenseId`:vRealizeSuite2019`",
-          `"nodeSize`": `"medium`",
-          `"fipsMode`": `"false`",
-          `"vraK8ServiceCidr`": `"`",
-          `"vraK8ClusterCidr`": `"`",
-          `"timeSyncMode`": `"ntp`",
-          `"ntp`": `"$ntp1`"
+        "id": "vra",
+        "version": "$vraVersion",
+        "properties": {
+          "certificate": "$CertificateLockerEntry",
+          "productPassword": "$defaultPasswordLockerEntry",
+          "licenseRef": "$defaultLicenseLockerEntry",
+          "nodeSize": "medium",
+          "fipsMode": "false",
+          "vraK8ServiceCidr": "",
+          "vraK8ClusterCidr": "",
+          "timeSyncMode": "ntp",
+          "ntp": "$ntp1"
         },
-        `"clusterVIP`": {
-          `"clusterVips`": []
+        "clusterVIP": {
+          "clusterVips": []
         },
-        `"nodes`": [
+        "nodes": [
           {
-            `"type`": `"vrava-primary`",
-            `"properties`": {
-              `"vmName`": `"$vraVmName`",
-              `"hostName`": `"$vraHostname`",
-              `"ip`": `"$vraIp`"
+            "type": "vrava-primary",
+            "properties": {
+              "vmName": "$vraVmName",
+              "hostName": "$vraHostname",
+              "ip": "$vraIp"
             }
           }
        ]
       }
     ]
-  }"
+  }
+"@
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vraDeployJSON
@@ -669,4 +734,4 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     }
 }
 $timer.Stop()
-Write-Host "vRA Deployment Status at " (get-date -format HH:mm) $response.state
+Write-Host "vRA Deployment Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
