@@ -10,6 +10,8 @@
 # - Import license from file
 # - dns/ntp bugfix
 # - renamed some variables
+# 27 Oct 2021
+# - bugfix Change vCenter Password to use Locker Password
 # Import-Module VMware.PowerCLI
 
 #################
@@ -99,12 +101,13 @@ $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
 $header.add("Authorization", "Basic $base64AuthInfo")
-$data=@{
-    "username" = "$vrslcmUsername"
-    "password" = "$vrlscmPassword"
-}| ConvertTo-Json
-
 $uri =  "https://$vrslcmHostname/lcm/authzn/api/firstboot/updatepassword"
+$data=@"
+{
+    "username" : "$vrslcmUsername",
+    "password" : "$vrlscmPassword"
+}
+"@
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
 #Login to vRSLCM with new password
@@ -148,6 +151,7 @@ DisConnect-VIServer $vCenterServer -Confirm:$false
 ##############################
 
 # Create vCenter account in Locker
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 $data=@"
 {
     "alias" : "$vCenterServer",
@@ -156,7 +160,6 @@ $data=@"
     "userName" : "$vcenterUsername"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -169,6 +172,7 @@ $vc_vmid = $response.vmid
 $vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterServer" #note the escape characters
 
 # Create Default Installation account in Locker
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 $data=@"
 {
     "alias" : "default",
@@ -177,7 +181,6 @@ $data=@"
     "userName" : "root"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
     $response
@@ -203,7 +206,6 @@ $data =@"
     "primaryLocation" : "$vrslcmDcLocation"
 }
 "@
-
 try {
     $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data 
     $response
@@ -213,10 +215,10 @@ try {
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
 }
+$datacenterRequestId = $response.requestId
 $dc_vmid = $response.dataCenterVmid
 
 # Check Datacenter Creation Request
-$datacenterRequestId = $response.requestId
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$datacenterRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
@@ -235,16 +237,16 @@ $timer.Stop()
 Write-Host "Datacenter creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 # Create vCenter
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 $data=@"
 {
     "vCenterHost" : "$vCenterServer",
     "vCenterName" : "$vCenterServer",
-    "vcPassword" : "$vCenterPassword",
+    "vcPassword" : "$vcPasswordLockerEntry",
     "vcUsedAs" : "MANAGEMENT_AND_WORKLOAD",
     "vcUsername" : "$vcenterUsername"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -253,9 +255,9 @@ try {
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
 }
+$vCenterRequestId = $response.requestId
 
 # Check vCenter Creation Request
-$vCenterRequestId = $response.requestId
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vCenterRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
@@ -279,13 +281,13 @@ Write-Host "vCenter creation and validation Status" $response.state -ForegroundC
 ###############################
 
 # Add NTP Server
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
 $data = @"
 {
     "name" : "ntp01",
     "hostName" : "$ntp1"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -296,13 +298,13 @@ try {
 }
 
 # Add DNS Server 1
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 $data = @"
 {
     "name" : "dns01",
     "hostName" : "$dns1"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -313,14 +315,13 @@ try {
 }
 
 # Add DNS Server 2
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 $data = @"
 {
     "name" : "dns02",
     "hostName" : "$dns2"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
-
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -334,6 +335,7 @@ try {
 ##################################
 ### Add vRealize Suite License ###
 ##################################
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/license/validate-and-add"
 $data=@"
 {
     "alias" : "$vrealizeLicenseAlias",
@@ -341,7 +343,6 @@ $data=@"
     "serialKey" : "$vrealizeLicense"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/locker/api/v2/license/validate-and-add"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -397,7 +398,6 @@ if ($importCert -eq $true){
         "privateKey" : "$FlatPrivateCert"
     }
 "@
-
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
@@ -421,7 +421,6 @@ elseif ($importCert -eq $false) {
     $certi = ($vrslcmDcLocation.Split(",")[0]).trim()
     $certst = ($vrslcmDcLocation.Split(",")[1]).trim()
     $certc = ($vrslcmDcLocation.Split(",")[2]).trim()
-
     $certificateData = @"
     {
         "alias": "$CertificateAlias",
@@ -460,19 +459,20 @@ $CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias"
 #############################
 
 # Get all Product Binaries from NFS location
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
 $data=@"
 {
   "sourceLocation" : "$nfsSourceLocation",
   "sourceType" : "NFS"
 }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
 $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 $response
 
 #To Do: Check if files exist or error out before starting import Request.
 
 # Import VIDM and vRA binaries from NFS location
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/download"
 $data = @"
 [
     {
@@ -487,8 +487,6 @@ $data = @"
     }
 ]
 "@
-
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/download"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
@@ -518,7 +516,6 @@ $timer.Stop()
 Write-Host "Binary Mapping Import Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 
-
 #################################################
 ### CREATE GLOBAL ENVIRONMENT AND DEPLOY VIDM ###
 #################################################
@@ -526,6 +523,7 @@ Write-Host "Binary Mapping Import Status" $response.state -ForegroundColor Black
 ###################
 ### DEPLOY VIDM ###
 ###################
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
 $vidmDeployJSON=@"
 {
     "environmentName": "globalenvironment",
@@ -606,9 +604,7 @@ $vidmDeployJSON=@"
     ]
   }
 "@
-
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
-  try {
+try {
      $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vidmDeployJSON
  } catch {
      write-host "Failed to create Global Environment" -ForegroundColor red
@@ -642,6 +638,7 @@ Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state
 ### DEPLOY VRA ###
 ##################
 Write-Host "Starting vRA Deployment"
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
 $vraDeployJSON =@"
 {
     "environmentName": "$vrslcmProdEnv",
@@ -707,7 +704,6 @@ $vraDeployJSON =@"
     ]
   }
 "@
-$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vraDeployJSON
 } catch {
