@@ -4,13 +4,15 @@
 # Henk Engelsman - https://www.vtam.nl
 # 20 Aug 2021
 #
+# 19 Nov 2021 - Updated for 8.6.1 release
+# - bugfix for ova copy
 # Import-Module VMware.PowerCLI #
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-18770640_86P1.iso" # "<path to iso file>"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-18940322.iso" # "<path to iso file>"
 $copyOVA = $true #Select $true to copy vra and vidm ova files to a NFS Share
 $nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
 $createSnapshot = $true #Set to $true to create a snapshot after deployment
@@ -110,14 +112,14 @@ if ($copyOVA -eq $true){
         Write-Host "VIDM ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
         Move-Item ("$nfsshare$vidmOva") -Destination ("$nfsshare$vidmOva"+".bak") -Force
         #Remove-Item "$nfsshare\vidm.ova"
-        Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     }
+    Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     If (Test-Path ("$nfsshare$vraOva")){
         Write-Host "vRA ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
         Move-Item ("$nfsshare$vraOva") -Destination ("$nfsshare$vraOva"+".bak") -Force
         #Remove-Item "$nfsshare\vra.ova"
-        Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
     }
+    Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
 }
     elseif ($copyOVA -eq $false) {
     Write-Host "Skip copying VIDM and vRA OVA Files to NFS" -BackgroundColor Green -ForegroundColor black
