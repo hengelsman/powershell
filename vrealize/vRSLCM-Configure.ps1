@@ -14,7 +14,7 @@
 # - bugfix Change vCenter Password to use Locker Password
 # Import-Module VMware.PowerCLI
 # 19 Nov 2021 - Updated for 8.6.1 release
-
+#
 #################
 ### VARIABLES ###
 #################
