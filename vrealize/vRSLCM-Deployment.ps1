@@ -12,8 +12,8 @@
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-18940322.iso" # "<path to iso file>"
-$copyOVA = $true #Select $true to copy vra and vidm ova files to a NFS Share
+$vrslcmIso = "C:\Temp\vra-lcm-installer-18929961_861GA.iso" # "<path to iso file>"
+$copyOVA = $false #Select $true to copy vra and vidm ova files to a NFS Share
 $nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
 $createSnapshot = $true #Set to $true to create a snapshot after deployment
 # vCenter variables

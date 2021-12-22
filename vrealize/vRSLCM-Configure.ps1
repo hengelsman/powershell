@@ -62,6 +62,7 @@ $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
 $vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 
+$deployvRA = $false
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
@@ -480,13 +481,7 @@ $data = @"
         "filePath":  "/data/nfsfiles/vidm.ova",
         "name":  "vidm.ova",
         "type":  "install"
-    },
-    {
-        "filePath":  "/data/nfsfiles/vra.ova",
-        "name":  "vra.ova",
-        "type":  "install"
     }
-]
 "@
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
@@ -547,7 +542,7 @@ $vidmDeployJSON=@"
         "folderName": "$deployVmFolderId",
         "resourcePool": "",
         "diskMode": "thin",
-        "network": "VMNet1",
+        "network": "$deployNetwork",
         "masterVidmEnabled": "false",
         "dns": "$dns1",
         "domain": "$domain",
@@ -638,6 +633,51 @@ Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state
 ##################
 ### DEPLOY VRA ###
 ##################
+
+if ($deployvRA -eq $true)
+{
+
+# Import vRA binaries from NFS location
+$uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/download"
+$data = @"
+[
+    {
+        "filePath":  "/data/nfsfiles/vra.ova",
+        "name":  "vra.ova",
+        "type":  "install"
+    }
+]
+"@
+try {
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+} catch {
+    write-host "Failed to Download from NFS Repo" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+$binaryMappingRequestId = $response.requestId
+
+#### Wait until the import has finished ####
+$uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$binaryMappingRequestId"
+Write-Host "Binary Mapping Import Started at" (get-date -format HH:mm)
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$Timeout = 3600
+$timer = [Diagnostics.Stopwatch]::StartNew()
+while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+    Start-Sleep -Seconds 60
+    Write-Host "Binary Mapping Import Status at " (get-date -format HH:mm) $response.state
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    if ($response.state -eq "FAILED"){
+        Write-Host "FAILED import Binaries " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Break
+    }
+}
+$timer.Stop()
+Write-Host "Binary Mapping Import Status" $response.state -ForegroundColor Black -BackgroundColor Green
+
+####
+
 Write-Host "Starting vRA Deployment"
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments"
 $vraDeployJSON =@"
@@ -732,3 +772,5 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
 }
 $timer.Stop()
 Write-Host "vRA Deployment Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+} # END Deploy vRA
+
