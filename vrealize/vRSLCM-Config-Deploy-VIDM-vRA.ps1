@@ -68,7 +68,7 @@ $vidmIp = "192.168.1.182"
 $vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
 $vidmResize = $true
 
-$deployvRA = $false
+$deployvRA = $true
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
@@ -531,7 +531,7 @@ $vidmDeployJSON=@"
         "diskMode": "thin",
         "network": "$deployNetwork",
         "masterVidmEnabled": "false",
-        "dns": "$dns1",
+        "dns": "$dns1,$dns2",
         "domain": "$domain",
         "gateway": "$gateway",
         "netmask": "$netmask",
@@ -671,17 +671,15 @@ if ($vidmResize -eq $true) {
     $timer.Stop()
     Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
 }
+} #End If $vidmDeploy is true
+else {
+    Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
 }
+
 
 ##################
 ### DEPLOY VRA ###
 ##################
-if (get-vm -Name $vraVmName -ErrorAction SilentlyContinue) {
-    Write-Host "Check if VM $vraVmName exists"
-    Write-Host "VM with name $vraVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
-    break
-}
-
 if ($deployvRA -eq $true)
 {
 Write-Host "Start importing vRA Binaries" -ForegroundColor Black -BackgroundColor Green
@@ -750,7 +748,7 @@ $vraDeployJSON =@"
         "network": "$deployNetwork",
         "folderName": "$deployVmFolderId",
         "masterVidmEnabled": "false",
-        "dns": "$dns1",
+        "dns": "$dns1,$dns2",
         "domain": "$domain",
         "gateway": "$gateway",
         "netmask": "$netmask",
