@@ -12,10 +12,12 @@
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-18929961_861GA.iso" # "<path to iso file>"
-$copyOVA = $false #Select $true to copy vra and vidm ova files to a NFS Share
-$nfsshare = "\\192.168.1.10\data\iso\vRealize\vRA8\latest\" #"<path to NFS share>""
-$createSnapshot = $true #Set to $true to create a snapshot after deployment
+$vrslcmIso = "C:\Temp\vra-lcm-installer-19001294.iso" # "<path to iso file>"
+#vra-lcm-installer-19001294.iso 8.6.1.iso | #vra-lcm-installer-18929961.iso - 8.6.0 | vra-lcm-installer-18067628.iso - 8.4.1
+$copyVIDMOVA = $false #Select $true to copy VIDM OVA file to a NFS Share
+$copyvRAOVA = $false #Select $true to copy VRA OVA file to a NFS Share
+$nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" #"<path to NFS share>""
+$createSnapshot = $true #Set to $true to create a snapshot on vRSLCM after deployment.
 # vCenter variables
 $vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
 $vcUser = "administrator@vsphere.local"
@@ -30,8 +32,8 @@ $gateway = "192.168.1.1"
 $dns = "192.168.1.204,192.168.1.205" # DNS Servers, Comma separated
 $domain = "infrajedi.local" #dns domain name
 $vrslcmVmname = "bvrslcm" #vRSLCM VM Name
-$vrslcmHostname = $vrslcmVmname+"."+$domain #joins vmname and domain to generate fqdn
-$vrlscmPassword = "VMware01!" #Note this is the root password, not the admin@local password
+$vrslcmHostname = $vrslcmVmname+"."+$domain #joins vmname and domain variable to generate fqdn
+$vrlscmRootPassword = "VMware01!" #Note this is the root password, not the admin@local password
 $ntp = "192.168.1.1"
 $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 
@@ -56,7 +58,7 @@ $vmhost = get-cluster $cluster | Get-VMHost | Select-Object -First 1
 #vRSLCM OVF Configuration Parameters
 $ovfconfig = Get-OvfConfiguration $vrslcmOvaPath
 $ovfconfig.Common.vami.hostname.Value = $vrslcmHostname
-$ovfconfig.Common.varoot_password.Value = $vrlscmPassword
+$ovfconfig.Common.varoot_password.Value = $vrlscmRootPassword
 $ovfconfig.Common.va_ssh_enabled.Value = $true
 #$ovfconfig.Common.va_firstboot_enabled.Value = $true #default is $true
 $ovfconfig.Common.va_telemetry_enabled.Value = $false
@@ -105,25 +107,37 @@ $vrslcmvm | Start-Vm -RunAsync | Out-Null
 # Disconnect vCenter
 Disconnect-VIServer $vcenter -Confirm:$false
 
-# Copy OVA files to NFS Share if selected. Existing files will be renamed.
-if ($copyOVA -eq $true){
-    Write-Host "VIDM and vRA OVA Files will be copied to $nfsshare" -BackgroundColor Green -ForegroundColor black
+# Copy VIDM OVA file to NFS Share if selected. Existing files will be renamed.
+if ($copyVIDMOVA -eq $true){
+    Write-Host "VIDM OVA File will be copied to $nfsshare" -BackgroundColor Green -ForegroundColor black
     If (Test-Path ("$nfsshare$vidmOva")){
         Write-Host "VIDM ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
         Move-Item ("$nfsshare$vidmOva") -Destination ("$nfsshare$vidmOva"+".bak") -Force
         #Remove-Item "$nfsshare\vidm.ova"
     }
     Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
+}
+    elseif ($copyVIDMOVA -eq $false) {
+    Write-Host "Skip copying VIDM OVA File to NFS" -BackgroundColor Green -ForegroundColor black
+    }
+
+##
+
+# Copy VRA file to NFS Share if selected. Existing files will be renamed.
+if ($copyvRAOVA -eq $true){
+    Write-Host "vRA OVA File will be copied to $nfsshare" -BackgroundColor Green -ForegroundColor black
     If (Test-Path ("$nfsshare$vraOva")){
         Write-Host "vRA ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
         Move-Item ("$nfsshare$vraOva") -Destination ("$nfsshare$vraOva"+".bak") -Force
         #Remove-Item "$nfsshare\vra.ova"
     }
     Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
+    
 }
-    elseif ($copyOVA -eq $false) {
-    Write-Host "Skip copying VIDM and vRA OVA Files to NFS" -BackgroundColor Green -ForegroundColor black
+    elseif ($copyvRAOVA -eq $false) {
+    Write-Host "Skip copying vRA OVA File to NFS" -BackgroundColor Green -ForegroundColor black
     }
+
 
 # Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null
