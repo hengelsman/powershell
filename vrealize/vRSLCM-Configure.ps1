@@ -1,5 +1,4 @@
 # Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
-# and optionally deploy vRA, vRLI and vROPS single/simple deployment
 # 
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
@@ -17,7 +16,8 @@
 # 19 Nov 2021 - Updated for 8.6.1 release
 #
 # 22 Dec 2021 - Choose wether to deploy vRA or not
-# 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA, vRLI and vROPS
+# 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA
+
 #################
 ### VARIABLES ###
 #################
@@ -136,7 +136,6 @@ Connect-VIServer $vCenterServer -User $vcenterUsername -Password $vCenterPasswor
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
-#DisConnect-VIServer $vCenterServer -Confirm:$false
 
 
 ##############################
@@ -531,7 +530,7 @@ $vidmDeployJSON=@"
         "diskMode": "thin",
         "network": "$deployNetwork",
         "masterVidmEnabled": "false",
-        "dns": "$dns1",
+        "dns": "$dns1,$dns2",
         "domain": "$domain",
         "gateway": "$gateway",
         "netmask": "$netmask",
@@ -675,6 +674,8 @@ if ($vidmResize -eq $true) {
 else {
     Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
 }
+
+
 ##################
 ### DEPLOY VRA ###
 ##################
@@ -746,7 +747,7 @@ $vraDeployJSON =@"
         "network": "$deployNetwork",
         "folderName": "$deployVmFolderId",
         "masterVidmEnabled": "false",
-        "dns": "$dns1",
+        "dns": "$dns1,$dns2",
         "domain": "$domain",
         "gateway": "$gateway",
         "netmask": "$netmask",
@@ -820,3 +821,5 @@ else {
     Write-Host "You have selected to not deploy vRA" -ForegroundColor Black -BackgroundColor Yellow
 }
 # END Deploy vRA
+
+DisConnect-VIServer $vCenterServer -Confirm:$false
