@@ -17,7 +17,8 @@
 # 19 Nov 2021 - Updated for 8.6.1 release
 #
 # 22 Dec 2021 - Choose wether to deploy vRA or not
-# 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA, vRLI and vROPS
+# 29 Dec 2021 - Configure vRSLCM. Deploy VIDM. Option to deploy vRA
+
 #################
 ### VARIABLES ###
 #################
@@ -136,7 +137,6 @@ Connect-VIServer $vCenterServer -User $vcenterUsername -Password $vCenterPasswor
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
-#DisConnect-VIServer $vCenterServer -Confirm:$false
 
 
 ##############################
@@ -671,13 +671,17 @@ if ($vidmResize -eq $true) {
     $timer.Stop()
     Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
 }
-} #End If $vidmDeploy is true
-else {
-    Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
 }
+
 ##################
 ### DEPLOY VRA ###
 ##################
+if (get-vm -Name $vraVmName -ErrorAction SilentlyContinue) {
+    Write-Host "Check if VM $vraVmName exists"
+    Write-Host "VM with name $vraVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
+    break
+}
+
 if ($deployvRA -eq $true)
 {
 Write-Host "Start importing vRA Binaries" -ForegroundColor Black -BackgroundColor Green
@@ -820,3 +824,5 @@ else {
     Write-Host "You have selected to not deploy vRA" -ForegroundColor Black -BackgroundColor Yellow
 }
 # END Deploy vRA
+
+DisConnect-VIServer $vCenterServer -Confirm:$false
