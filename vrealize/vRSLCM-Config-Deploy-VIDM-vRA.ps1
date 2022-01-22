@@ -18,6 +18,7 @@
 #
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Deploy VIDM. Option to deploy vRA
+# 19 Jan 2022 - 8.6.2 Upgrade. Moved resize VIDM resources to end.
 
 #################
 ### VARIABLES ###
@@ -65,14 +66,14 @@ $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
-$vidmResize = $true
+$vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
+$vidmResize = $true #Note: Doing before vRA deployment will fail vRA8.6.2 deployment
 
 $deployvRA = $true
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.1" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.6.2" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 
 # Allow Selfsigned certificates in powershell
@@ -614,67 +615,8 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
 }
 $timer.Stop()
 Write-Host "VIDM Deployment Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
-
-###########################################
-# Downsize VIDM to 2 vCPU | 6 GB          #
-# For Testing / Homelab environment only! #
-###########################################
-
-if ($vidmResize -eq $true) {
-    write-host "VIDM VM will be resized to smallest size. Not supported for production environments"  -ForegroundColor Black -BackgroundColor Yellow
-    # Power OFF VIDM via vRSLCM Request
-    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments/globalenvironment/products/vidm/power-off"
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
-    $vidmPowerOffRequestId = $response.requestId
-    # Check VIDM Power OFF Request
-    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vidmPowerOffRequestId"
-    Write-Host "VIDM Power OFF Started at" (get-date -format HH:mm)
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-    $Timeout = 3600
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
-        Start-Sleep -Seconds 60
-        Write-Host "VIDM Power OFF Status at " (get-date -format HH:mm) $response.state
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-        if ($response.state -eq "FAILED"){
-            Write-Host "FAILED to Power OFF VIDM " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
-            Break
-        }
-    }
-    $timer.Stop()
-    Write-Host "VIDM Power OFF Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
-
-    # Resize VIDM
-    Set-VM -vm $vidmVmName -MemoryGB 8 -NumCpu 2 -Confirm:$false
-    $vidmvm = get-vm -Name $vidmVmName
-    Write-Host "VIDM VM Set to " $vidmVm.NumCpu " vCPU and " $vidmVM.MemoryGB " GB Memory" -ForegroundColor Black -BackgroundColor Green
-
-    #Power ON VIDM
-    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments/globalenvironment/products/vidm/power-on"
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
-    $vidmPowerOnRequestId = $response.requestId
-    # Check VIDM Power ON Request
-    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vidmPowerOnRequestId"
-    Write-Host "VIDM Power ON Started at" (get-date -format HH:mm)
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-    $Timeout = 3600
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
-        Start-Sleep -Seconds 60
-        Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-        if ($response.state -eq "FAILED"){
-            Write-Host "FAILED to Power ON VIDM " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
-            Break
-        }
-    }
-    $timer.Stop()
-    Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
 }
-} #End If $vidmDeploy is true
-else {
-    Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
-}
+
 
 
 ##################
@@ -822,5 +764,68 @@ else {
     Write-Host "You have selected to not deploy vRA" -ForegroundColor Black -BackgroundColor Yellow
 }
 # END Deploy vRA
+
+
+
+###########################################
+# Downsize VIDM to 2 vCPU | 6 GB          #
+# For Testing / Homelab environment only! #
+###########################################
+
+if ($vidmResize -eq $true) {
+    write-host "VIDM VM will be resized to smallest size. Not supported for production environments"  -ForegroundColor Black -BackgroundColor Yellow
+    # Power OFF VIDM via vRSLCM Request
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments/globalenvironment/products/vidm/power-off"
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+    $vidmPowerOffRequestId = $response.requestId
+    # Check VIDM Power OFF Request
+    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vidmPowerOffRequestId"
+    Write-Host "VIDM Power OFF Started at" (get-date -format HH:mm)
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 3600
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "VIDM Power OFF Status at " (get-date -format HH:mm) $response.state
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+        if ($response.state -eq "FAILED"){
+            Write-Host "FAILED to Power OFF VIDM " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+            Break
+        }
+    }
+    $timer.Stop()
+    Write-Host "VIDM Power OFF Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+
+    # Resize VIDM
+    Set-VM -vm $vidmVmName -MemoryGB 8 -NumCpu 2 -Confirm:$false
+    $vidmvm = get-vm -Name $vidmVmName
+    Write-Host "VIDM VM Set to " $vidmVm.NumCpu " vCPU and " $vidmVM.MemoryGB " GB Memory" -ForegroundColor Black -BackgroundColor Green
+
+    #Power ON VIDM
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/environments/globalenvironment/products/vidm/power-on"
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+    $vidmPowerOnRequestId = $response.requestId
+    # Check VIDM Power ON Request
+    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vidmPowerOnRequestId"
+    Write-Host "VIDM Power ON Started at" (get-date -format HH:mm)
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 3600
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+        if ($response.state -eq "FAILED"){
+            Write-Host "FAILED to Power ON VIDM " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+            Break
+        }
+    }
+    $timer.Stop()
+    Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+}
+else {
+    Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
+}
+
 
 DisConnect-VIServer $vCenterServer -Confirm:$false

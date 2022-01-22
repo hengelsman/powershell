@@ -6,16 +6,16 @@
 #
 # 19 Nov 2021 - Updated for 8.6.1 release
 # - bugfix for ova copy
-# Import-Module VMware.PowerCLI #
+# 22 Jan 2022 - Updated for 8.6.2 release
 #
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-19001294.iso" # "<path to iso file>"
+$vrslcmIso = "Z:\vRealize\vRA8\vra-lcm-installer-862_19221692.iso" # "<path to iso file>"
 #vra-lcm-installer-19001294.iso 8.6.1.iso | #vra-lcm-installer-18929961.iso - 8.6.0 | vra-lcm-installer-18067628.iso - 8.4.1
-$copyVIDMOVA = $false #Select $true to copy VIDM OVA file to a NFS Share
-$copyvRAOVA = $false #Select $true to copy VRA OVA file to a NFS Share
+$copyVIDMOVA = $true #Select $true to copy VIDM OVA file to a NFS Share
+$copyvRAOVA = $true #Select $true to copy VRA OVA file to a NFS Share
 $nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" #"<path to NFS share>""
 $createSnapshot = $true #Set to $true to create a snapshot on vRSLCM after deployment.
 # vCenter variables

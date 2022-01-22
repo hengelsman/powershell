@@ -13,19 +13,19 @@
 
 
 #vRA VARIABLES
-$vraName = "vra"
-$domain = "domain.local"
+$vraName = "bvra"
+$domain = "infrajedi.local"
 $vraHostname = $vraname+"."+$domain
-$vraUsername = "admin"
+$vraUsername = "configadmin"
 $vraPassword = "VMware01!" #note use ` as escape character for special chars like $
 $vraUserDomain = "System Domain" #Use "System Domain" for local users", otherwise use the AD domain.
 
 #vCenter (to add to vRA as CloudAccount) VARIABLES 
-$vcenterName = "vcsa7"
+$vcenterName = "vcsamgmt"
 $vcenterHostname = $vcenterName+"."+$domain
 $vcenterUsername = "administrator@vsphere.local"
 $vcenterPassword = "VMware01!"
-$vcenterDatacenter = "dc7" #Name of the vCenter datacenter object to add
+$vcenterDatacenter = "dc-mgmt" #Name of the vCenter datacenter object to add
 
 #Connect to vCenter to retrieve the datacenter id
 Connect-VIServer $vcenterHostname -User $vcenterUsername -Password $vcenterPassword
