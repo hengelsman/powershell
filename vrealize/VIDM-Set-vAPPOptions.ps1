@@ -1,5 +1,6 @@
-# CHANGE GUEST OS on VIDM Appliance, enable and configure vAPP Options
+# Change GuestOS setting on VIDM Appliance, enable vAPP Options, configure OVF Properties
 # See KB83587 - https://kb.vmware.com/s/article/83587
+# https://www.vtam.nl/
 
 #Variables
 $vcenter = "vcenter.domain.local"
@@ -19,15 +20,10 @@ Connect-VIServer $vcenter
 
 #Change Guest OS from SUSE Linux to Other3x
 #Optional if you have started with an older version of VIDM
-$spec = New-Object VMware.Vim.VirtualMachineConfigSpec
-$spec.DeviceChange = New-Object VMware.Vim.VirtualDeviceConfigSpec[] (0)
-$spec.CpuFeatureMask = New-Object VMware.Vim.VirtualMachineCpuIdInfoSpec[] (0)
-$spec.GuestId = 'other3xLinux64Guest'
-$_this = Get-View (get-vm -Name $vmname)
-$_this.ReconfigVM_Task($spec)
+#get-vm $vmname |set-vm -GuestId "other3xLinux64Guest" -Confirm:$false
 
 
-#Enable vAPP Options
+# Enable vAPP Options
 $spec = New-Object VMware.Vim.VirtualMachineConfigSpec
 $spec.VAppConfig = New-Object VMware.Vim.VmConfigSpec
 $spec.VAppConfig.Product = New-Object VMware.Vim.VAppProductSpec[] (1)
@@ -48,8 +44,9 @@ $spec.VAppConfig.IpAssignment.IpAllocationPolicy = 'fixedPolicy'
 $_this = Get-View (get-vm -Name $vmname)
 $_this.ReconfigVM_Task($spec)
 
-
-#ADD VIDM OVF Properties
+###########################
+# ADD VIDM OVF Properties #
+###########################
 
 #0. ADD TimeZone Property
 $spec = New-Object VMware.Vim.VirtualMachineConfigSpec
