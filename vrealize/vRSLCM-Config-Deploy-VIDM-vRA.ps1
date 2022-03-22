@@ -1,5 +1,7 @@
 # Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
-# and optionally deploy vRA, vRLI and vROPS single/simple deployment
+# and optionally deploy vRA.
+#
+# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 # 
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
@@ -19,6 +21,8 @@
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Deploy VIDM. Option to deploy vRA
 # 19 Jan 2022 - 8.6.2 Upgrade. Moved resize VIDM resources to end.
+# 22 Mar 2022 - 8.7 - Choice to import OVAs from NFS or vRSLCM appliance.
+
 
 #################
 ### VARIABLES ###
@@ -34,7 +38,6 @@ $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam, South Holland, NL"
 $vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
-
 $dns1 = "192.168.1.204"
 $dns2 = "192.168.1.205"
 $ntp1 = "192.168.1.1"
@@ -52,16 +55,26 @@ $PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 $CertificateAlias = "vRealizeCertificate"
 
+#vCenter Variables
 $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
-
-$nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where ova files are stored.
 $deployDatastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 
+#OVA Variables
+$ovaSourceType = "Local" # Local or NFS
+$ovaSourceLocation="/data/temp" #
+$ovaFilepath = $ovaSourceLocation
+if ($ovaSourceType -eq "NFS"){
+    $ovaSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where ova files are stored.
+	$ovaFilepath="/data/nfsfiles"
+}
+#write-host "value: $OVASourceType $ovaFilepath $OVASourceLocation"
+
+#VIDM Variables
 $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
@@ -69,12 +82,12 @@ $vidmIp = "192.168.1.182"
 $vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
 $vidmResize = $true #Note: Doing before vRA deployment will fail vRA8.6.2 deployment
 
+#vRA Variables
 $deployvRA = $true
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.2" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
-
+$vraVersion = "8.7.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 # Allow Selfsigned certificates in powershell
 Function Unblock-SelfSignedCert() {
@@ -453,32 +466,34 @@ $CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias"
 
 if ($deployVIDM -eq $true){
 
-# Get all Product Binaries from NFS location
+Write-Host "VIDM Binaries will be imported from $OVASourceType" -ForegroundColor Black -BackgroundColor Green
+
+# Get all Product Binaries from Source Location
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
 $data=@"
 {
-  "sourceLocation" : "$nfsSourceLocation",
-  "sourceType" : "NFS"
+  "sourceLocation" : "$OVASourceLocation",
+  "sourceType" : "$OVASourceType"
 }
 "@
 $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 $response
 
-# Import VIDM ova/binary from NFS location
+# Import VIDM Product Binaries from Source location
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/download"
 $data = @"
 [
     {
-        "filePath":  "/data/nfsfiles/vidm.ova",
-        "name":  "vidm.ova",
-        "type":  "install"
+        "filePath": "$ovaFilepath/vidm.ova",
+        "name": "vidm.ova",
+        "type": "install"
     }
 ]
 "@
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
-    write-host "Failed to Download from NFS Repo" -ForegroundColor red
+    write-host "Failed to import Binaries from $ovaSourceType" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
@@ -630,16 +645,16 @@ $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries/downl
 $data = @"
 [
     {
-        "filePath":  "/data/nfsfiles/vra.ova",
-        "name":  "vra.ova",
-        "type":  "install"
+        "filePath": "$ovaFilepath/vra.ova",
+        "name": "vra.ova",
+        "type": "install"
     }
 ]
 "@
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
 } catch {
-    write-host "Failed to Download from NFS Repo" -ForegroundColor red
+    write-host "Failed to Import OVA file from $ovaSourceType" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
     Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
     break
