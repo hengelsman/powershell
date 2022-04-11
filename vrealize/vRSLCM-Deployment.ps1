@@ -9,19 +9,22 @@
 # 22 Jan 2022 - Updated for 8.6.2 release
 # 22 March 2022 - Updated for 8.7.0 Release
 # - Added option to copy source OVA to NFS share or vRSLCM Appliance (Requires Posh-SSH module)
-import-module Posh-SSH
+# 11 April 2022 - Added second snapshot creation option
+import-module Posh-SSH -ErrorAction break
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-19527797.iso" # "<path to iso file>"
-$copyVIDMOVA = $true # true | $false
-$copyvRAOVA = $true # true | $false
+#$vrslcmIso = "C:\Temp\vra-lcm-installer-19527797.iso" # "<path to iso file>"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-850_18488288.iso" # "<path to iso file>"
+$copyVIDMOVA = $true # $true | $false
+$copyvRAOVA = $true # $true | $false
 $ovaDestinationType = "VRSLCM" # VRSLCM or NFS
 $nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" # "<path to NFS share>"
+$createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
+$createSnapshotOVA = $true # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 
-$createSnapshot = $false #Set to $true to create a snapshot on vRSLCM after deployment.
 # vCenter variables
 $vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
 $vcUser = "administrator@vsphere.local"
@@ -92,30 +95,27 @@ if (get-vm -Name $vrslcmVmName -ErrorAction SilentlyContinue){
     break
 }
 else {
-    Write-Host "VM with name $vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor Green
+    Write-Host "VM with name $vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
 }
 
 
 # Deploy vRSLCM
-Write-Host "Start Deployment of VRSLCM" -ForegroundColor White -BackgroundColor Green
+Write-Host "Start Deployment of VRSLCM" -ForegroundColor White -BackgroundColor DarkGreen
 $vrslcmvm = Import-VApp -Source $vrslcmOvaPath -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
 
-
-# Create Snapshot if configured and start vRSLCM VM
-#Note the admin@local password defaults to "vmware"
-if ($createSnapshot -eq $true){
-    Write-Host "Create Pre Firstboot Snapshot" -ForegroundColor White -BackgroundColor Green
-    New-Snapshot -VM $vrslcmVmname -Name "Pre Firstboot Snapshot"
+# Create Snapshot of vRSLCM VM
+if ($createSnapshotPreboot -eq $true){
+    Write-Host "Create Snapshot before initial PowerOn" -ForegroundColor White -BackgroundColor DarkGreen
+    New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Preboot Snapshot"
 }
 
-Write-Host "Starting VRSLCM VM"
+
+
+# Start vRSLCM
+Write-Host "Starting VRSLCM VM" -ForegroundColor White -BackgroundColor DarkGreen
 $vrslcmvm | Start-Vm -RunAsync | Out-Null
-
-$vrslcmvm | Start-Vm
-
-# Wait until vRSLCM is available
 do { 
-    Write-Host "Waiting for vRLSCM availability..." -ForegroundColor Black -BackgroundColor Yellow
+    Write-Host "Waiting for vRLSCM availability..." -ForegroundColor Yellow -BackgroundColor Black
     Start-Sleep -Seconds 5
 } until (Test-Connection $vrslcmHostname -Quiet -Count 1) 
 
@@ -125,7 +125,7 @@ do {
 # Copy VIDM OVA File to vRSLCM or NFS
 if ($copyVIDMOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
-        Write-Host "VIDM OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor Green
+        Write-Host "VIDM OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor DarkGreen
         If (Test-Path ("$nfsshare$vidmOva")){
             Write-Host "VIDM ova File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$nfsshare$vidmOva") -Destination ("$nfsshare$vidmOva"+".bak") -Force
@@ -134,7 +134,7 @@ if ($copyVIDMOVA -eq $true){
         Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor Green
+        Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor DarkGreen
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
         Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vidmOvaPath -Force
@@ -148,7 +148,7 @@ elseif ($copyVIDMOVA -eq $false) {
 # Copy vRA OVA File to vRSLCM or NFS
 if ($copyvRAOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
-        Write-Host "vRA OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor Green
+        Write-Host "vRA OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor DarkGreen
         If (Test-Path ("$nfsshare$vraOva")){
             Write-Host "vRA OVA File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$nfsshare$vraOva") -Destination ("$nfsshare$vraOva"+".bak") -Force
@@ -156,7 +156,7 @@ if ($copyvRAOVA -eq $true){
         Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor Green
+        Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor DarkGreen
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
         Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vraOvaPath -Force
@@ -167,9 +167,18 @@ elseif ($copyvRAOVA -eq $false) {
     }
 
 
+# Create Snapshot of vRSLCM VM
+if ($createSnapshotOVA -eq $true){
+    Write-Host "Create Snapshot with ova files (if selected)" -ForegroundColor White -BackgroundColor DarkGreen
+    New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Snapshot" -Description "vRSLCM Snapshot"
+}
+
+
 # Disconnect vCenter
 Disconnect-VIServer $vcenter -Confirm:$false
 
 
 # Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null
+
+# Note the default admin@local password is "vmware"

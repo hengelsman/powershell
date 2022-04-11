@@ -13,15 +13,14 @@
 # - Import license from file
 # - dns/ntp bugfix
 # - renamed some variables
-# 27 Oct 2021
-# - bugfix Change vCenter Password to use Locker Password
-# Import-Module VMware.PowerCLI
+# 27 Oct 2021 - bugfix Change vCenter Password to use Locker Password
 # 19 Nov 2021 - Updated for 8.6.1 release
-#
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Deploy VIDM. Option to deploy vRA
 # 19 Jan 2022 - 8.6.2 Upgrade. Moved resize VIDM resources to end.
 # 22 Mar 2022 - 8.7 - Choice to import OVAs from NFS or vRSLCM appliance.
+# 23 Mar 2022 - 8.7 - Small update to add DcLocation Coordinates
+# 11 Apr 2022 - fix issue with generatad cert because of 23 Mar change.
 
 
 #################
@@ -36,7 +35,7 @@ $vrslcmDefaultAccount = "configadmin"
 $vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
-$vrslcmDcLocation = "Rotterdam, South Holland, NL"
+$vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
 $dns1 = "192.168.1.204"
 $dns2 = "192.168.1.205"
@@ -44,13 +43,15 @@ $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
 
+#Get Licence key from file or manually enter key below
+#$vrealizeLicense = ABCDE-01234-FGHIJ-56789-KLMNO
 $vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
 # Set $importCert to $true to import your pre generated certs.
 # Configure the paths below to import your existing Certificates
 # If $false is selected, a wildcard certificate will be generated in vRSLCM
-$importCert = $true
+$importCert = $false
 $PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 $CertificateAlias = "vRealizeCertificate"
@@ -79,15 +80,15 @@ $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
-$vidmResize = $true #Note: Doing before vRA deployment will fail vRA8.6.2 deployment
+$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
+$vidmResize = $false #Note: Doing before vRA deployment will fail vRA8.6+ deployment
 
 #vRA Variables
 $deployvRA = $true
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.7.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.5.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 # Allow Selfsigned certificates in powershell
 Function Unblock-SelfSignedCert() {
@@ -204,7 +205,6 @@ $defaultPasswordLockerEntry="locker`:password`:$dp_vmid`:default" ##note the esc
 #####################################
 ### Create Datacenter and vCenter ###
 #####################################
-
 # Create Datacenter
 $dcuri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters"
 $data =@"
@@ -423,9 +423,9 @@ elseif ($importCert -eq $false) {
     #prep cert inputs derived from $domain and $vrslcmDcLocation variables
     $certo = $domain.Split(".")[0]
     $certoU = $domain.Split(".")[1]
-    $certi = ($vrslcmDcLocation.Split(",")[0]).trim()
-    $certst = ($vrslcmDcLocation.Split(",")[1]).trim()
-    $certc = ($vrslcmDcLocation.Split(",")[2]).trim()
+    $certi = ($vrslcmDcLocation.Split(";")[0]).trim()
+    $certst = ($vrslcmDcLocation.Split(";")[1]).trim()
+    $certc = ($vrslcmDcLocation.Split(";")[2]).trim()
     $certificateData = @"
     {
         "alias": "$CertificateAlias",
@@ -839,7 +839,7 @@ if ($vidmResize -eq $true) {
     Write-Host "VIDM Power ON Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
 }
 else {
-    Write-Host "You have selected to not deploy VIDM" -ForegroundColor Black -BackgroundColor Yellow
+    Write-Host "You have selected to not resize VIDM" -ForegroundColor Black -BackgroundColor Yellow
 }
 
 
