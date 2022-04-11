@@ -9,17 +9,17 @@
 # 22 Jan 2022 - Updated for 8.6.2 release
 # 22 March 2022 - Updated for 8.7.0 Release
 # - Added option to copy source OVA to NFS share or vRSLCM Appliance (Requires Posh-SSH module)
-# - import-module Posh-SSH
+import-module Posh-SSH
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
 $vrslcmIso = "C:\Temp\vra-lcm-installer-19527797.iso" # "<path to iso file>"
-$copyVIDMOVA = $true
-$copyvRAOVA = $true
-$ovaDestinationType = "VRSLCM" #Choose NFS or "VRSLCM"
-$nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" #"<path to NFS share>""
+$copyVIDMOVA = $true # true | $false
+$copyvRAOVA = $true # true | $false
+$ovaDestinationType = "VRSLCM" # VRSLCM or NFS
+$nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" # "<path to NFS share>"
 
 $createSnapshot = $false #Set to $true to create a snapshot on vRSLCM after deployment.
 # vCenter variables
@@ -87,76 +87,83 @@ $ovfconfig.NetworkMapping.Network_1.Value = $network
 
 # Check if vRSCLM VM already exist
 if (get-vm -Name $vrslcmVmName -ErrorAction SilentlyContinue){
-    Write-Host "Check if VM $vrslcmVmName exists"
+    Write-Host "Checking if VM $vrslcmVmName exists..." -ForegroundColor black -BackgroundColor Yellow
     Write-Host "VM with name $vrslcmVmName already found. Stopping Deployment" -ForegroundColor White -BackgroundColor Red
     break
 }
 else {
-    Write-Host "VM with name $vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor DarkGreen
+    Write-Host "VM with name $vrslcmVmName not found, Deployment will continue..." -ForegroundColor White -BackgroundColor Green
 }
 
 
 # Deploy vRSLCM
-Write-Host "Start Deployment of VRSLCM"
+Write-Host "Start Deployment of VRSLCM" -ForegroundColor White -BackgroundColor Green
 $vrslcmvm = Import-VApp -Source $vrslcmOvaPath -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
 
 
 # Create Snapshot if configured and start vRSLCM VM
 #Note the admin@local password defaults to "vmware"
 if ($createSnapshot -eq $true){
-    Write-Host "Create Pre Firstboot Snapshot"
+    Write-Host "Create Pre Firstboot Snapshot" -ForegroundColor White -BackgroundColor Green
     New-Snapshot -VM $vrslcmVmname -Name "Pre Firstboot Snapshot"
 }
 
 Write-Host "Starting VRSLCM VM"
 $vrslcmvm | Start-Vm -RunAsync | Out-Null
 
-#Todo Check if vRSLCM is available #
+$vrslcmvm | Start-Vm
+
+# Wait until vRSLCM is available
+do { 
+    Write-Host "Waiting for vRLSCM availability..." -ForegroundColor Black -BackgroundColor Yellow
+    Start-Sleep -Seconds 5
+} until (Test-Connection $vrslcmHostname -Quiet -Count 1) 
+
 
 ### Copy OVA Files to vRSLCM or NFS ###
 
 # Copy VIDM OVA File to vRSLCM or NFS
 if ($copyVIDMOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
-        Write-Host "OVA will be copied to NFS share $nfsshare"
+        Write-Host "VIDM OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor Green
         If (Test-Path ("$nfsshare$vidmOva")){
-            Write-Host "VIDM ova File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
+            Write-Host "VIDM ova File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$nfsshare$vidmOva") -Destination ("$nfsshare$vidmOva"+".bak") -Force
             #Remove-Item "$nfsshare\vidm.ova"
         }
         Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "OVA will be copied to vRSLCM Local disk "
+        Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor Green
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
         Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vidmOvaPath -Force
     }
 }
 elseif ($copyVIDMOVA -eq $false) {
-    Write-Host "Skip copying VIDM OVA Files" -BackgroundColor Green -ForegroundColor black
+    Write-Host "Skip copying VIDM OVA Files" -ForegroundColor black -BackgroundColor Yellow
     }
 
 
 # Copy vRA OVA File to vRSLCM or NFS
 if ($copyvRAOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
-        Write-Host "vRA OVA will be copied to NFS share $nfsshare"
+        Write-Host "vRA OVA will be copied to NFS share $nfsshare" -ForegroundColor White -BackgroundColor Green
         If (Test-Path ("$nfsshare$vraOva")){
-            Write-Host "vRA OVA File exists and will be renamed" -BackgroundColor Yellow -ForegroundColor black
+            Write-Host "vRA OVA File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$nfsshare$vraOva") -Destination ("$nfsshare$vraOva"+".bak") -Force
         }
         Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "vRA OVA will be copied to vRSLCM Local disk "
+        Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor Green
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
         Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vraOvaPath -Force
     }
 }
 elseif ($copyvRAOVA -eq $false) {
-    Write-Host "Skip copying vRA OVA Files" -BackgroundColor Green -ForegroundColor black
+    Write-Host "Skip copying vRA OVA Files" -ForegroundColor black -BackgroundColor Yellow
     }
 
 
