@@ -15,7 +15,6 @@
 # - bugfix Change vCenter Password to use Locker Password
 # Import-Module VMware.PowerCLI
 # 19 Nov 2021 - Updated for 8.6.1 release
-#
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA, vRLI and vROPS
 #################
@@ -39,13 +38,15 @@ $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
 
+#Get Licence key from file or manually enter key
+#$vrealizeLicense = ABCDE-01234-FGHIJ-56789-KLMNO
 $vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
 # Set $importCert to $true to import your pre generated certs.
 # Configure the paths below to import your existing Certificates
 # If $false is selected, a wildcard certificate will be generated in vRSLCM
-$importCert = $true
+$importCert = $false
 $PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
 $PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
 $CertificateAlias = "vRealizeCertificate"

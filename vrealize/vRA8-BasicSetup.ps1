@@ -11,7 +11,6 @@
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 # Check the end of the script to Allow Selfsigned certificates if applicable
 
-
 #vRA VARIABLES
 $vraName = "bvra"
 $domain = "infrajedi.local"
@@ -93,35 +92,93 @@ $header.add("Authorization", "Bearer $vraBearerToken")
 
 
 
-################################
-#        Cloud Account         #
-################################
-
-# Create vSphere cloud Account by using Generic Cloud Account URI
+####################################
+#   Create vCenter Cloud Account   #
+####################################
 $vCenterJSON = @"
 {
-	"cloudAccountType": "vsphere",
-	"cloudAccountProperties": {
-		"hostName": "$vcenterHostname",
-		"dcId": "onprem",
-		"privateKeyId": "$vcenterUsername",
-		"privateKey": "$vcenterPassword",
-		"acceptSelfSignedCertificate": true
-	},
-	"createDefaultZones": true,
-	"regions": [{
-		"name": "$vcenterDatacenter",
-		"externalRegionId": "$vcenterDatacenterIdFormatted"
-	}],
-	"name": "vcenter-$vcenterHostname",
-	"privateKeyId": "$vcenterUsername",
-	"privateKey": "$vcenterPassword",
-	"customProperties": {
-		"isExternal": "false"
-	},
-	"associatedCloudAccountIds": []
+  "hostName": "$vcenterHostname",
+  "username": "$vcenterUsername",
+  "password": "$vcenterPassword",
+  "acceptSelfSignedCertificate": true,
+  "createDefaultZones": true,
+  "regions": [
+    {
+      "name": "$vcenterDatacenter",
+      "externalRegionId": "$vcenterDatacenterIdFormatted"
+    }
+  ],
+  "name": "$vcenterName",
+  "description": "$vcenterName Cloud Account"
 }
 "@
+
+$uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere"
+$vCenterCloudAccount = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vCenterJSON
+$vCenterCloudAccountId = $vCenterCloudAccount.id
+$vCenterCloudAccountId
+
+
+#Get vSphere Cloud Accounts
+$uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$response.content
+
+
+#Get Cloud Zones
+$uri = "https://$vraHostname/iaas/zones"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$response.content
+
+######################
+#   Create Project   #
+######################
+
+$projectJSON = @"
+{
+	"name": "p-infra",
+	"description": "Infra Project",
+	"properties": {
+		"costcenter": "999",
+		"__namingTemplate": "",
+		"__projectPlacementPolicy": "DEFAULT"
+	},
+	"constraints": {
+		"network": null,
+		"storage": null,
+		"extensibility": null
+	},
+	"sharedResources": true,
+	"administrator": [
+		{
+		  "email": "configadmin",
+		  "type": "user"
+		}
+	  ],
+	  "viewers": [
+		{
+		  "email": "configadmin",
+		  "type": "user"
+		}
+	  ]
+	"operationTimeout": 0
+}
+"@
+
+$uri = "https://$vraHostname/project-service/api/projects"
+$uri
+$vRAProject = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $projectJSON
+Write-Host "Project Name: " $vRAProject.name " has id: " $vRAProject.id
+
+
+
+
+<#
+#Region Enumeration
+$uri = https://bvra.infrajedi.local/iaas/api/cloud-accounts/region-enumeration?apiVersion=2021-07-15
+$response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+
+
 $uri = "https://$vraHostname/iaas/api/cloud-accounts/"
 $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vCenterJSON
 $response #show full result
@@ -144,31 +201,8 @@ $response.content
 $uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere"
 $response = $cloudAccount = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $response.content
+#>
 
-
-################################
-#           Projects           #
-################################
-
-# Create Project
-$projectJSON = @"
-{
-	"name": "p-test",
-	"description": "First Project",
-	"properties": {
-		"costcenter": "999",
-		"__namingTemplate": "${resource.name}",
-		"__projectPlacementPolicy": "DEFAULT"
-	},
-	"constraints": {
-		"network": null,
-		"storage": null,
-		"extensibility": null
-	},
-	"sharedResources": true,
-	"operationTimeout": 0
-}
-"@
 
 # Patch Project
 # will follow
@@ -181,7 +215,7 @@ $projectJSON = @"
 $uri = "https://$vraHostname/blueprint/api/blueprints"
 
 #Import Ubuntu Cloud Template
-$ubuntuContent = get-content "\\192.168.1.10\ISO\vRealize\vRA8\Henk-Blueprints\20211001_ubuntu.yaml"
+$ubuntuContent = get-content "\\192.168.1.10\ISO\vRealize\vRA8\Henk-Blueprints\ubuntu-cn.yaml"
 $ubuntuContentFlat = ([string]::join("\n",($ubuntuContent.Split("`n")))) + "\n"
 $data = @"
 {
@@ -196,11 +230,11 @@ $data = @"
 Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 
 #Import Photon Cloud Template
-$photonContent = get-content "\\192.168.1.10\ISO\vRealize\vRA8\Henk-Blueprints\20211027_photon4.yaml"
+$photonContent = get-content "\\192.168.1.10\ISO\vRealize\vRA8\Henk-Blueprints\photon-cn.yaml"
 $photonContentFlat = ([string]::join("\n",($photonContent.Split("`n")))) + "\n"
 $data = @"
 {
-	"name": "photon",
+	"name": "photon-cn",
 	"description": null,
 	"valid": true,
 	"content": "$photonContentFlat",
@@ -332,4 +366,3 @@ if ([System.Net.ServicePointManager]::CertificatePolicy -notlike 'TrustAllCertsP
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 #Unblock Selfsigned Certs (uses function and the end)
 Unblock-SelfSignedCert
-	

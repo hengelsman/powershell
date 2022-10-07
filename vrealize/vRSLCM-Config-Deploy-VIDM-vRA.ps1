@@ -21,7 +21,7 @@
 # 22 Mar 2022 - 8.7 - Choice to import OVAs from NFS or vRSLCM appliance.
 # 23 Mar 2022 - 8.7 - Small update to add DcLocation Coordinates
 # 11 Apr 2022 - fix issue with generatad cert because of 23 Mar change.
-
+# 07 okt 2022 - 8.10 Update
 
 #################
 ### VARIABLES ###
@@ -80,15 +80,15 @@ $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
+$vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
 $vidmResize = $false #Note: Doing before vRA deployment will fail vRA8.6+ deployment
 
 #vRA Variables
-$deployvRA = $true
+$deployvRA = $false
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.5.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.10.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
 
 # Allow Selfsigned certificates in powershell
 Function Unblock-SelfSignedCert() {

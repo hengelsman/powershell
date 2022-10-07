@@ -1,29 +1,33 @@
 # Powershell Script to Deploy vRSLCM
-# Optionally copy vidm and vra files to configure NFS share
+# Optionally copy vidm and vra files to vRSLCM or NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
 # 20 Aug 2021
 #
-# 19 Nov 2021 - Updated for 8.6.1 release
+# 19 Nov 2021 - Updated for 8.6.1 release - vra-lcm-installer-18940322.iso
 # - bugfix for ova copy
-# 22 Jan 2022 - Updated for 8.6.2 release
-# 22 March 2022 - Updated for 8.7.0 Release
+# 22 Jan 2022 - Updated for 8.6.2 release - vra-lcm-installer-19221692.iso
+# 22 March 2022 - Updated for 8.7.0 Release - vra-lcm-installer-19527797.iso
 # - Added option to copy source OVA to NFS share or vRSLCM Appliance (Requires Posh-SSH module)
 # 11 April 2022 - Added second snapshot creation option
-import-module Posh-SSH -ErrorAction break
+# 29 April 2022 - Updated for 8.8.0 Release - vra-lcm-installer-19716706.iso
+# 07 October 2022 - Updated for 8.10.0 Release - vra-lcm-installer-20590145.iso
+# - Added force option on import-vapp cmd
+
+#Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
+import-module -name Posh-SSH -ErrorAction Stop
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-#$vrslcmIso = "C:\Temp\vra-lcm-installer-19527797.iso" # "<path to iso file>"
-$vrslcmIso = "C:\Temp\vra-lcm-installer-850_18488288.iso" # "<path to iso file>"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-20590145.iso" # "<path to iso file>"
 $copyVIDMOVA = $true # $true | $false
 $copyvRAOVA = $true # $true | $false
 $ovaDestinationType = "VRSLCM" # VRSLCM or NFS
 $nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" # "<path to NFS share>"
 $createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
-$createSnapshotOVA = $true # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
+$createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 
 # vCenter variables
 $vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
@@ -46,7 +50,7 @@ $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 
 
 # Mount the Iso and extract ova paths
-$mountResult = Mount-DiskImage $vrslcmIso -PassThru
+$mountResult = Mount-DiskImage $vrslcmIso -PassThru -ErrorAction Stop
 Start-sleep -Seconds 5
 $driveletter = ($mountResult | Get-Volume).DriveLetter
 $vrslcmOva = (Get-ChildItem ($driveletter + ":\" + "vrlcm\*.ova")).Name
@@ -56,7 +60,7 @@ $vidmOvaPath = $driveletter+":\ova\"+$vidmOva
 $vraOva = "vra.ova"
 $vraOvaPath = $driveletter+":\ova\"+$vraOva
 # Or Remark the above and configure the path to the vRLCM ova file below
-#$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.4.1.1-18627606_OVF10.ova"
+#$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.10.0.6-20590142_OVF10.ova"
 
 
 # Connect to vCenter
@@ -101,7 +105,7 @@ else {
 
 # Deploy vRSLCM
 Write-Host "Start Deployment of VRSLCM" -ForegroundColor White -BackgroundColor DarkGreen
-$vrslcmvm = Import-VApp -Source $vrslcmOvaPath -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin
+$vrslcmvm = Import-VApp -Source $vrslcmOvaPath -OvfConfiguration $ovfconfig -Name $vrslcmVmname -Location $cluster -InventoryLocation $vmFolder -VMHost $vmhost -Datastore $datastore -DiskStorageFormat thin -Force -ErrorAction Stop
 
 # Create Snapshot of vRSLCM VM
 if ($createSnapshotPreboot -eq $true){
@@ -134,10 +138,10 @@ if ($copyVIDMOVA -eq $true){
         Start-BitsTransfer -source $vidmOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor DarkGreen
+        Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data" -ForegroundColor White -BackgroundColor DarkGreen
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
-        Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vidmOvaPath -Force
+        Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data" -Path $vidmOvaPath -Force
     }
 }
 elseif ($copyVIDMOVA -eq $false) {
@@ -156,10 +160,10 @@ if ($copyvRAOVA -eq $true){
         Start-BitsTransfer -source $vraOvaPath -Destination $nfsshare
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
-        Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data/temp" -ForegroundColor White -BackgroundColor DarkGreen
+        Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data" -ForegroundColor White -BackgroundColor DarkGreen
         $vRSLCMRootSS = ConvertTo-SecureString -String $vrlscmRootPassword -AsPlainText -Force
         $vRSLCMCred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList root, $vRSLCMRootSS
-        Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data/temp" -Path $vraOvaPath -Force
+        Set-SCPItem -ComputerName $vrslcmHostname -AcceptKey:$true -Credential $vRSLCMCred -Destination "/data" -Path $vraOvaPath -Force
     }
 }
 elseif ($copyvRAOVA -eq $false) {
