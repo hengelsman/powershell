@@ -17,6 +17,7 @@
 #
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA
+# 21 Jan 2023 - Minor Updates
 
 #################
 ### VARIABLES ###
@@ -64,14 +65,14 @@ $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
+$vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5
 $vidmResize = $true
 
 $deployvRA = $false
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.1" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.11.0"
 
 
 # Allow Selfsigned certificates in powershell
