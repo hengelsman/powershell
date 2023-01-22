@@ -79,13 +79,13 @@ $header.add("Authorization", "Bearer $vraBearerToken")
 $uri = "https://$vraHostname/iaas/api/cloud-accounts/"
 $response = Invoke-RestMethod -Method get -Uri $uri -Headers $header
 #Check $response for the full response
-$response.content |Select name, cloudAccountType, id
+$response.content |Select-Object name, cloudAccountType, id
 
 # REST example to retrieve Projects
 $uri = "https://$vraHostname/project-service/api/projects/"
 $response = Invoke-RestMethod -Method get -Uri $uri -Headers $header
 #Check $response for the full response
-$response.content |Select name, id
+$response.content |Select-Object name, id
 
 
 

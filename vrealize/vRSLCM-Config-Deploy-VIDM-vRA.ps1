@@ -22,6 +22,7 @@
 # 23 Mar 2022 - 8.7 - Small update to add DcLocation Coordinates
 # 11 Apr 2022 - fix issue with generatad cert because of 23 Mar change.
 # 07 okt 2022 - 8.10 Update
+# 21 Jan 2022 - Minor Updates
 
 #################
 ### VARIABLES ###
@@ -30,7 +31,7 @@ $vrslcmVmname = "bvrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrlscmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
@@ -60,7 +61,7 @@ $CertificateAlias = "vRealizeCertificate"
 $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
-$deployDatastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
+$deployDatastore = "DS01-870EVO" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
@@ -70,7 +71,7 @@ $ovaSourceType = "Local" # Local or NFS
 $ovaSourceLocation="/data/temp" #
 $ovaFilepath = $ovaSourceLocation
 if ($ovaSourceType -eq "NFS"){
-    $ovaSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where ova files are stored.
+    $ovaSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where ova files are stored.
 	$ovaFilepath="/data/nfsfiles"
 }
 #write-host "value: $OVASourceType $ovaFilepath $OVASourceLocation"
@@ -88,7 +89,7 @@ $deployvRA = $false
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.10.0" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.11.0" # for example 8.11.0,8.10.1
 
 # Allow Selfsigned certificates in powershell
 Function Unblock-SelfSignedCert() {
@@ -127,14 +128,14 @@ $uri =  "https://$vrslcmHostname/lcm/authzn/api/firstboot/updatepassword"
 $data=@"
 {
     "username" : "$vrslcmUsername",
-    "password" : "$vrlscmAdminPassword"
+    "password" : "$vrslcmAdminPassword"
 }
 "@
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
 #Login to vRSLCM with new password
 #Build Header, including authentication
-$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrlscmAdminPassword)))
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrslcmAdminPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')

@@ -15,17 +15,19 @@
 # - Added force option on import-vapp cmd
 
 #Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
+# 21 Jan 2022 - Minor Updates for 8.11 release
+
 import-module -name Posh-SSH -ErrorAction Stop
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-20590145.iso" # "<path to iso file>"
+$vrslcmIso = "C:\Temp\vra-lcm-installer-21147090.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
 $copyVIDMOVA = $true # $true | $false
 $copyvRAOVA = $true # $true | $false
 $ovaDestinationType = "VRSLCM" # VRSLCM or NFS
-$nfsshare = "\\192.168.1.10\data\ISO\vRealize\latest\" # "<path to NFS share>"
+$nfsshare = "\\192.168.1.10\ssd1\ISO2\vRealize\latest\" # "<path to NFS share>"
 $createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 
@@ -36,7 +38,7 @@ $vcPassword = "VMware01!" #vCenter password
 # General Configuration Parameters
 $cluster = "cls-mgmt"
 $network = "VMNet1"
-$datastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
+$datastore = "DS01-870EVO" #vSphere Datastore to use for deployment
 $vrslcmIp = "192.168.1.180" #vRSLCM IP Address
 $netmask = "255.255.255.0"
 $gateway = "192.168.1.1"

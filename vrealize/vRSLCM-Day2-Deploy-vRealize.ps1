@@ -6,7 +6,7 @@
 #
 # Henk Engelsman - https://www.vtam.nl
 # 2021/12/29 - Initial version based on other/previous scripts.
-#
+# 21 Jan 2023 - Minor Updates
 
 #################
 ### VARIABLES ###
@@ -18,8 +18,8 @@ $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interf
 $vrlscmPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
-$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
-$vrslcmDcLocation = "Rotterdam, South Holland, NL"
+#$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
+#$vrslcmDcLocation = "Rotterdam, South Holland, NL"
 $vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
 
 $dns1 = "192.168.1.204"
@@ -39,32 +39,32 @@ $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 
-$nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where vidm.ova and vra.ova are stored.
-$deployDatastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
+#$nfsSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vidm.ova and vra.ova are stored.
+$deployDatastore = "DS01-870EVO" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 
 $deployvRA = $false
-$vraNFSSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where vRLI ova is stored.
+$vraNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vRLI ova is stored.
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.1" # for example 8.4.0, 8.4.1, 8.4.2, 8.5.0, 8.5.1
+$vraVersion = "8.11.0"
 
 $deployvRLI = $true
-$vrliNFSSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where vRLI ova is stored.
+$vrliNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vRLI ova is stored.
 $vrliVmName = "bvrli"
 $vrliHostname = $vrliVmName + "." + $domain
 $vrliIp = "192.168.1.186"
-$vrliVersion = "8.6.1"
+$vrliVersion = "8.10.0"
 
 $deployvROPS = $true
-$vropsNFSSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where vROPS ova is stored.
+$vropsNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vROPS ova is stored.
 $vropsVmName = "bvrops"
 $vropsHostname = $vropsVmName + "." + $domain
 $vropsIp = "192.168.1.187"
-$vropsVersion = "8.6.1"
+$vropsVersion = "8.10.1"
 
 
 ############################################################################
@@ -294,8 +294,8 @@ else {
 ####################
 ### DEPLOY vROPS ###
 ####################
-if ($deployvRLI -eq $true){
-# Retrieve available Product Binaries from vRLI NFS location
+if ($deployvROPS -eq $true){
+# Retrieve available Product Binaries from vROPS NFS location
 Write-Host "Start importing vROPS Binaries" -ForegroundColor Black -BackgroundColor Green
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/product-binaries"
 $data=@"
