@@ -3,16 +3,16 @@
 # https://www.vtam.nl/
 
 #Variables
-$vcenter = "vcenter.domain.local"
+$vcenter = "vcsa.infrajedi.local"
 $vmname = "vidm"
 $vamitimezone = "Etc/UTC" # See #0. ADD TimeZone Property for options
 $vamiceipEnabled = $true
-$vamihostname = "vidm.domain.local"
+$vamihostname = "vidm.infrajedi.local"
 $vamigateway = "192.168.1.1"
-$vamidomain = "domain.local"
-$vamisearchpath = "domain.local"
-$vamidns = "1.1.1.1,2.2.2.2"
-$vamiip = "192.168.1.10"
+$vamidomain = "infrajedi.local"
+$vamisearchpath = "infrajedi.local"
+$vamidns = "192.168.1.204,192.168.1.205"
+$vamiip = "192.168.1.214"
 $vaminetmask = "255.255.255.0"
 
 #Connect

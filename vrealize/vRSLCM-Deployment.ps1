@@ -1,9 +1,8 @@
 # Powershell Script to Deploy vRSLCM
-# Optionally copy vidm and vra files to vRSLCM or NFS share
+# Optionally copy vidm and vra OVA files to vRSLCM or NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
 # 20 Aug 2021
-#
 # 19 Nov 2021 - Updated for 8.6.1 release - vra-lcm-installer-18940322.iso
 # - bugfix for ova copy
 # 22 Jan 2022 - Updated for 8.6.2 release - vra-lcm-installer-19221692.iso
@@ -13,20 +12,21 @@
 # 29 April 2022 - Updated for 8.8.0 Release - vra-lcm-installer-19716706.iso
 # 07 October 2022 - Updated for 8.10.0 Release - vra-lcm-installer-20590145.iso
 # - Added force option on import-vapp cmd
-
-#Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
 # 21 Jan 2022 - Minor Updates for 8.11 release
 
+#Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
 import-module -name Posh-SSH -ErrorAction Stop
 
 #################
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "C:\Temp\vra-lcm-installer-21147090.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
+$vrslcmIso = "Y:\vRealize\vRA8\vra-lcm-installer-21147090.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
 $copyVIDMOVA = $true # $true | $false
 $copyvRAOVA = $true # $true | $false
-$ovaDestinationType = "VRSLCM" # VRSLCM or NFS
+$ovaDestinationType = "VRSLCM" #VRSLCM or NFS
+    #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
+    #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
 $nfsshare = "\\192.168.1.10\ssd1\ISO2\vRealize\latest\" # "<path to NFS share>"
 $createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
