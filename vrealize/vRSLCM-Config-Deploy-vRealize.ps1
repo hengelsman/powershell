@@ -1,5 +1,6 @@
-# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
-# and optionally deploy vRA, vRLI and vROPS single/simple deployment
+# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm and optionally deploy vRA, vROPS, vRLI
+#
+# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 # 
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf

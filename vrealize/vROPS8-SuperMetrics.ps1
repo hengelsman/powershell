@@ -1,5 +1,3 @@
-##
-#
 # Sample vROPS API Script
 #
 # v0.1 | 30 March 2022
@@ -16,9 +14,9 @@ $vropspassword = "VMware01!"
 
 # Use VIDM Auth Source
 # Note: The body to require a token is different and does not need "authSource"
-$vropsauthsource = "VIDMAuthSource"
-$vropsusername = "henk" + "@$domain" +"@$vropsauthsource"  #henk@infrajedi.local@VIDMAuthSource
-$vropspassword = "Dali`$005" #note: Special characters must be escaped with `
+#$vropsauthsource = "VIDMAuthSource"
+#$vropsusername = "jedi" + "@$domain" +"@$vropsauthsource"  #henk@infrajedi.local@VIDMAuthSource
+#$vropspassword = "password" #note: Special characters must be escaped with `
 
 
 # Unblock selfsigned Certs
@@ -82,7 +80,7 @@ $header.add("Authorization", "vRealizeOpsToken $vropstoken") #add token to Heade
 # Get All SuperMetrics
 $uri = "https://$vropshostname/suite-api/api/supermetrics"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-$response.superMetrics |Select name,id
+$response.superMetrics |Select-Object name,id
 
 # Get Supermetric by name
 $uri = "https://$vropshostname/suite-api/api/supermetrics?name=henkTestSuperMetric"
@@ -102,8 +100,8 @@ $response
 # Get All Alerts example
 $uri = "https://$vropshostname/suite-api/api/alerts"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-$activeAlerts = $response.alerts |Select alertId,controlState, alertLevel, status |Where {$_.status -eq "ACTIVE"}
-$criticalAlerts = $activeAlerts |Where {$_.alertLevel -eq "CRITICAL"}
+$activeAlerts = $response.alerts |Select-Object alertId,controlState, alertLevel, status |Where-Object {$_.status -eq "ACTIVE"}
+$criticalAlerts = $activeAlerts |Where-Object {$_.alertLevel -eq "CRITICAL"}
 Write-host "There are" $activeAlerts.Count "Active Alerts, with" $criticalAlerts.Count "Criticals" 
 
 

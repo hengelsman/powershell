@@ -1,5 +1,4 @@
-# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
-# and optionally deploy vRA.
+# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm and optionally deploy vRA.
 #
 # Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 # 

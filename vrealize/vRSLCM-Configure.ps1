@@ -1,5 +1,7 @@
 # Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
 # 
+# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
+# 
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
@@ -26,7 +28,7 @@ $vrslcmVmname = "bvrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrlscmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
@@ -112,14 +114,14 @@ $uri =  "https://$vrslcmHostname/lcm/authzn/api/firstboot/updatepassword"
 $data=@"
 {
     "username" : "$vrslcmUsername",
-    "password" : "$vrlscmAdminPassword"
+    "password" : "$vrslcmAdminPassword"
 }
 "@
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
 #Login to vRSLCM with new password
 #Build Header, including authentication
-$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrlscmAdminPassword)))
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrslcmAdminPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
