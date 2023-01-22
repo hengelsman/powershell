@@ -17,6 +17,8 @@
 # 19 Nov 2021 - Updated for 8.6.1 release
 # 22 Dec 2021 - Choose wether to deploy vRA or not
 # 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA, vRLI and vROPS
+# 21 Jan 2023 - Minor updates
+
 #################
 ### VARIABLES ###
 #################
@@ -24,12 +26,12 @@ $vrslcmVmname = "bvrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrlscmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
-$vrslcmDcLocation = "Rotterdam, South Holland, NL"
+$vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
 
 $dns1 = "192.168.1.204"
@@ -55,8 +57,8 @@ $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 
-$nfsSourceLocation="192.168.1.10:/data/ISO/vRealize/latest" #NFS location where ova files are stored.
-$deployDatastore = "DS01-SSD870-1" #vSphere Datastore to use for deployment
+$nfsSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where ova files are stored.
+$deployDatastore = "DS01-870EVO" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
@@ -64,28 +66,28 @@ $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.5" # for example 3.3.4, 3.3.5
+$vidmVersion = "3.3.6"
 $vidmResize = $true
 
 $deployvRA = $false
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.6.1" # for example 8.6.0, 8.5.1, 8.5.0, 8.4.2
+$vraVersion = "8.11.0"
 
 $deployvRLI = $true
 $vrliNFSSourceLocation=$nfsSourceLocation #NFS location where vRLI ova is stored.
 $vrliVmName = "bvrli"
 $vrliHostname = $vrliVmName + "." + $domain
 $vrliIp = "192.168.1.186"
-$vrliVersion = "8.6.2"
+$vrliVersion = "8.10.0"
 
 $deployvROPS = $true
 $vropsNFSSourceLocation=$nfsSourceLocation #NFS location where vROPS ova is stored.
 $vropsVmName = "bvrops"
 $vropsHostname = $vropsVmName + "." + $domain
 $vropsIp = "192.168.1.187"
-$vropsVersion = "8.6.2"
+$vropsVersion = "8.10.1"
 
 
 # Allow Selfsigned certificates in powershell
@@ -125,14 +127,14 @@ $uri =  "https://$vrslcmHostname/lcm/authzn/api/firstboot/updatepassword"
 $data=@"
 {
     "username" : "$vrslcmUsername",
-    "password" : "$vrlscmAdminPassword"
+    "password" : "$vrslcmAdminPassword"
 }
 "@
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
 #Login to vRSLCM with new password
 #Build Header, including authentication
-$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrlscmAdminPassword)))
+$base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrslcmAdminPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
