@@ -1,6 +1,7 @@
 # Change GuestOS setting on VIDM Appliance, enable vAPP Options, configure OVF Properties
 # See KB83587 - https://kb.vmware.com/s/article/83587
 # https://www.vtam.nl/
+# Update 03/feb/2023 - Added value for vm.vmname and made it user configurable
 
 #Variables
 $vcenter = "vcsa.infrajedi.local"
@@ -256,7 +257,7 @@ $spec.VAppConfig.Property[0].Operation = 'add'
 $spec.VAppConfig.Property[0].Info = New-Object VMware.Vim.VAppPropertyInfo
 $spec.VAppConfig.Property[0].Info.ClassId = ''
 $spec.VAppConfig.Property[0].Info.InstanceId = ''
-$spec.VAppConfig.Property[0].Info.UserConfigurable = $false
+$spec.VAppConfig.Property[0].Info.UserConfigurable = $true
 $spec.VAppConfig.Property[0].Info.DefaultValue = 'IdentityManager'
 $spec.VAppConfig.Property[0].Info.Description = ''
 $spec.VAppConfig.Property[0].Info.TypeReference = ''
@@ -264,7 +265,7 @@ $spec.VAppConfig.Property[0].Info.Id = 'vm.vmname'
 $spec.VAppConfig.Property[0].Info.Label = 'vmname'
 $spec.VAppConfig.Property[0].Info.Category = ''
 $spec.VAppConfig.Property[0].Info.Type = 'string'
-$spec.VAppConfig.Property[0].Info.Value = ''
+$spec.VAppConfig.Property[0].Info.Value = 'IdentityManager'
 $spec.VAppConfig.Property[0].Info.Key = 9
 $_this = Get-View (get-vm -Name $vmname)
 $_this.ReconfigVM_Task($spec)
