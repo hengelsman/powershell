@@ -23,7 +23,7 @@ import-module -name Posh-SSH -ErrorAction Stop
 # Path to EasyInstaller ISO
 $vrslcmIso = "Y:\vRealize\vRA8\vra-lcm-installer-21147090.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
 $copyVIDMOVA = $true # $true | $false
-$copyvRAOVA = $true # $true | $false
+$copyvRAOVA = $false # $true | $false
 $ovaDestinationType = "VRSLCM" #VRSLCM or NFS
     #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
     #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
