@@ -2,6 +2,7 @@
 # Optionally copy vidm and vra OVA files to vRSLCM or NFS share
 #
 # Henk Engelsman - https://www.vtam.nl
+# For vRA buildnumbers see https://kb.vmware.com/s/article/2143850
 # 20 Aug 2021
 # 19 Nov 2021 - Updated for 8.6.1 release - vra-lcm-installer-18940322.iso
 # - bugfix for ova copy
@@ -21,13 +22,13 @@ import-module -name Posh-SSH -ErrorAction Stop
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "Y:\vRealize\vRA8\vra-lcm-installer-21147090.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
+$vrslcmIso = "Y:\vRealize\vRA8\vra-lcm-installer-21329473.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
 $copyVIDMOVA = $true # $true | $false
 $copyvRAOVA = $false # $true | $false
 $ovaDestinationType = "VRSLCM" #VRSLCM or NFS
     #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
     #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
-$nfsshare = "\\192.168.1.10\ssd1\ISO2\vRealize\latest\" # "<path to NFS share>"
+$nfsshare = "\\192.168.1.10\ssd1\ISO2\vRealize\latest\" # "<path to SMB/NFS share>"
 $createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 
@@ -38,7 +39,7 @@ $vcPassword = "VMware01!" #vCenter password
 # General Configuration Parameters
 $cluster = "cls-mgmt"
 $network = "VMNet1"
-$datastore = "DS01-870EVO" #vSphere Datastore to use for deployment
+$datastore = "DS02-870EVO" #vSphere Datastore to use for deployment
 $vrslcmIp = "192.168.1.180" #vRSLCM IP Address
 $netmask = "255.255.255.0"
 $gateway = "192.168.1.1"
@@ -52,6 +53,8 @@ $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 
 
 # Mount the Iso and extract ova paths
+# Or Remark the part below and configure the path to the vRLCM ova file
+#$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.10.0.6-20590142_OVF10.ova"
 $mountResult = Mount-DiskImage $vrslcmIso -PassThru -ErrorAction Stop
 Start-sleep -Seconds 5
 $driveletter = ($mountResult | Get-Volume).DriveLetter
@@ -61,8 +64,6 @@ $vidmOva = "vidm.ova"
 $vidmOvaPath = $driveletter+":\ova\"+$vidmOva
 $vraOva = "vra.ova"
 $vraOvaPath = $driveletter+":\ova\"+$vraOva
-# Or Remark the above and configure the path to the vRLCM ova file below
-#$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.10.0.6-20590142_OVF10.ova"
 
 
 # Connect to vCenter
@@ -114,7 +115,6 @@ if ($createSnapshotPreboot -eq $true){
     Write-Host "Create Snapshot before initial PowerOn" -ForegroundColor White -BackgroundColor DarkGreen
     New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Preboot Snapshot"
 }
-
 
 
 # Start vRSLCM
@@ -187,4 +187,4 @@ Disconnect-VIServer $vcenter -Confirm:$false
 # Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null
 
-# Note the default admin@local password is "vmware"
+# Note the default username/password for vRSLCM is admin@local password is "vmware"

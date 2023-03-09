@@ -1,5 +1,4 @@
 # Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm and optionally deploy vRA.
-#
 # Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 # 
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
@@ -23,6 +22,31 @@
 # 07 okt 2022 - 8.10 Update
 # 21 Jan 2022 - Minor Updates
 
+if ($PSEdition -eq 'Core') {
+    $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
+}
+
+if ($PSEdition -eq 'Desktop') {
+    # Enable communication with self signed certs when using Windows Powershell
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+
+    if ("TrustAllCertificatePolicy" -as [type]) {} else {
+        Add-Type @"
+	using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertificatePolicy : ICertificatePolicy {
+        public TrustAllCertificatePolicy() {}
+		public bool CheckValidationResult(
+            ServicePoint sPoint, X509Certificate certificate,
+            WebRequest wRequest, int certificateProblem) {
+            return true;
+        }
+	}
+"@
+        [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertificatePolicy
+    }
+}
+
 #################
 ### VARIABLES ###
 #################
@@ -45,22 +69,22 @@ $netmask = "255.255.255.0"
 
 #Get Licence key from file or manually enter key below
 #$vrealizeLicense = ABCDE-01234-FGHIJ-56789-KLMNO
-$vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
+$vrealizeLicense = Get-Content "Y:\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
 # Set $importCert to $true to import your pre generated certs.
 # Configure the paths below to import your existing Certificates
 # If $false is selected, a wildcard certificate will be generated in vRSLCM
 $importCert = $false
-$PublicCertPath = "C:\Private\Homelab\Certs\pub_bvrslcm.cer"
-$PrivateCertPath = "C:\Private\Homelab\Certs\priv_bvrslcm.cer"
+$PublicCertPath = "Y:\Certs\pub_bvrslcm.cer"
+$PrivateCertPath = "Y:\Certs\priv_bvrslcm.cer"
 $CertificateAlias = "vRealizeCertificate"
 
 #vCenter Variables
 $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
-$deployDatastore = "DS01-870EVO" #vSphere Datastore to use for deployment
+$deployDatastore = "DS02-870EVO" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
@@ -80,8 +104,8 @@ $deployVIDM = $true
 $vidmVmName = "bvidm"
 $vidmHostname = $vidmVMName + "." + $domain
 $vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.6" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
-$vidmResize = $false #Note: Doing before vRA deployment will fail vRA8.6+ deployment
+$vidmVersion = "3.3.7" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
+$vidmResize = $true #Note: Doing before vRA deployment will fail vRA8.6+ deployment
 
 #vRA Variables
 $deployvRA = $false
@@ -89,29 +113,6 @@ $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
 $vraVersion = "8.11.0" # for example 8.11.0,8.10.1
-
-# Allow Selfsigned certificates in powershell
-Function Unblock-SelfSignedCert() {
-if ([System.Net.ServicePointManager]::CertificatePolicy -notlike 'TrustAllCertsPolicy') {
-    Add-Type -TypeDefinition @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-    public class TrustAllCertsPolicy : ICertificatePolicy {
-        public bool CheckValidationResult(
-            ServicePoint srvPoint, X509Certificate certificate,
-            WebRequest request, int certificateProblem) {
-            return true;
-        }
-    }
-"@
-    [System.Net.ServicePointManager]::CertificatePolicy = New-Object -TypeName TrustAllCertsPolicy
-    }
-}
-Unblock-SelfSignedCert #run above function to unblock selfsigned certs
-
-#Use TLS 1.2 for REST calls
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
-
 
 ############################################################################
 ### Change intial vRSLCM admin password and create authentication header ###
@@ -169,7 +170,7 @@ $data=@"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add $data.passwordDescription to Locker" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -190,7 +191,7 @@ $data=@"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
     $response
 } catch {
     write-host "Failed to add $data.passwordEscription to Locker" -ForegroundColor red
@@ -214,7 +215,7 @@ $data =@"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data
     $response
 } catch {
     write-host "Failed to create datacenter $data.dataCenterName" -ForegroundColor red
@@ -255,7 +256,7 @@ $data=@"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add vCenter $data.vCenterHost" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -312,7 +313,7 @@ $data = @"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add DNS Server $dns1" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -328,7 +329,7 @@ $data = @"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add DNS Server $dns2" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -444,7 +445,7 @@ elseif ($importCert -eq $false) {
 "@
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates"
     try {
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData 
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
     } catch {
         write-host "Failed to create Standard Certificate $CertificateAlias" -ForegroundColor red
         Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -476,7 +477,7 @@ $data=@"
   "sourceType" : "$OVASourceType"
 }
 "@
-$response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+$response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 $response
 
 # Import VIDM Product Binaries from Source location
