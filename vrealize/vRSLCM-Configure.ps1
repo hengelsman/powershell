@@ -1,4 +1,4 @@
-# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm
+# Powershell script to configure Aria / vRealize Lifecycle (Manager) - vRSLCM
 # 
 # Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 # Check out the script vRSLCM-Config-Deploy-VIDM-vRA.ps1 for initial deployment, VIDM and vRA Deployment
@@ -34,12 +34,12 @@ $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $installPSPack = $true
 $pspackfile = "z:\VMware\vRealize\vRSLCM\vrlcm-8.12.0-PSPACK3.pspak"
-
-
 $dns1 = "172.16.1.11"
 $dns2 = "172.16.1.12"
 $ntp1 = "192.168.1.1"
 
+#Get Licence key from file or manually enter key below
+#$vrealizeLicense = "ABCDE-01234-FGHIJ-56789-KLMNO"
 $vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
@@ -53,6 +53,7 @@ $PublicCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard.pem"
 $PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
 
+#vCenter Variables
 $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
@@ -327,7 +328,6 @@ Write-Host "Licence creation and validation Status" $response.state -ForegroundC
 #####################################################
 ### Import existing, or generate new certificate  ###
 #####################################################
-
 # Import existing certificate if $importCert is set to $true
 # Note the public certificate should have the complete certificate chain.
 if ($importCert -eq $true){
@@ -344,7 +344,7 @@ if ($importCert -eq $true){
         "privateKey" : "$FlatPrivateCert"
     }
 "@
-    $response =""    
+    $response =""
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData

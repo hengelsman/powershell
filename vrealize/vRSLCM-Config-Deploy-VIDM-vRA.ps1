@@ -1,6 +1,7 @@
-# Powershell script to configure vRealize Lifecycle Managerv(vRSLCM), deploy single node vidm and optionally deploy vRA.
+# Powershell script to configure Aria / vRealize Lifecycle (Manager) - vRSLCM, deploy single node vidm and optionally deploy vRA.
+#
 # Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
-# 
+# # Check out the script vRSLCM-Config-Deploy-VIDM-vRA.ps1 for initial deployment, VIDM and vRA Deployment
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
@@ -21,7 +22,82 @@
 # 11 Apr 2022 - fix issue with generatad cert because of 23 Mar change.
 # 07 okt 2022 - 8.10 Update
 # 21 Jan 2022 - Minor Updates
+# 26 Apr 2023 - 8.12 Changes
+# 23 Jun 2023 - Cleanup code
 
+#################
+### VARIABLES ###
+#################
+$vrslcmVmname = "bvrslcm"
+$domain = "infrajedi.local"
+$vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
+$vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmDefaultAccount = "configadmin"
+$vrslcmDefaultAccountPassword = "VMware01!"
+$vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
+$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
+$vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
+$vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
+$dns1 = "172.16.1.11"
+$dns2 = "172.16.1.12"
+$ntp1 = "192.168.1.1"
+$gateway = "192.168.1.1"
+$netmask = "255.255.255.0"
+
+#Get Licence key from file or manually enter key below
+#$vrealizeLicense = "ABCDE-01234-FGHIJ-56789-KLMNO"
+$vrealizeLicense = Get-Content "Z:\homelab\Lics\vRealizeS2019Ent-license.txt"
+$vrealizeLicenseAlias = "vRealizeSuite2019"
+
+# Set $importCert to $true to import your pre generated certs.
+# I have used a wildcard cert here, which will be used for VIDM and vRA (not a best practice)
+# Configure the paths below to import your existing Certificates
+# If $false is selected, a wildcard certificate will be generated in vRSLCM
+$importCert = $true
+$replaceLCMCert = $true
+$PublicCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard.pem"
+$PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
+$CertificateAlias = "vRealizeCertificate"
+
+#vCenter Variables
+$vCenterServer = "vcsamgmt.infrajedi.local"
+$vcenterUsername = "administrator@vsphere.local"
+$vCenterPassword = "VMware01!"
+$deployDatastore = "DS02-870EVO" #vSphere Datastore to use for deployment
+$deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
+$deployNetwork = "VMNet1"
+$deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
+
+#OVA Variables
+$ovaSourceType = "Local" # Local or NFS
+$ovaSourceLocation="/data" #
+$ovaFilepath = $ovaSourceLocation
+if ($ovaSourceType -eq "NFS"){
+    $ovaSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where ova files are stored.
+	$ovaFilepath="/data/nfsfiles"
+}
+#write-host "value: $OVASourceType $ovaFilepath $OVASourceLocation"
+
+#VIDM Variables
+$deployVIDM = $true
+$vidmVmName = "bvidm"
+$vidmHostname = $vidmVMName + "." + $domain
+$vidmIp = "192.168.1.182"
+$vidmVersion = "3.3.7"
+$vidmResize = $true #Note: Doing before vRA deployment will fail vRA deployment
+
+#vRA Variables
+$deployvRA = $true
+$vraVmName = "bvra"
+$vraHostname = $vraVMName + "." + $domain
+$vraIp = "192.168.1.185"
+$vraVersion = "8.12.0"
+
+### END VARIABLES ###
+
+
+### Start Skip Certificate Checks ###
 if ($PSEdition -eq 'Core') {
     $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
 }
@@ -46,73 +122,8 @@ if ($PSEdition -eq 'Desktop') {
         [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertificatePolicy
     }
 }
+### End Skip Certificate Checks ###
 
-#################
-### VARIABLES ###
-#################
-$vrslcmVmname = "bvrslcm"
-$domain = "infrajedi.local"
-$vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
-$vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
-$vrslcmDefaultAccount = "configadmin"
-$vrslcmDefaultAccountPassword = "VMware01!"
-$vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
-$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
-$vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
-$vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
-$dns1 = "192.168.1.204"
-$dns2 = "192.168.1.205"
-$ntp1 = "192.168.1.1"
-$gateway = "192.168.1.1"
-$netmask = "255.255.255.0"
-
-#Get Licence key from file or manually enter key below
-#$vrealizeLicense = ABCDE-01234-FGHIJ-56789-KLMNO
-$vrealizeLicense = Get-Content "Y:\Lics\vRealizeS2019Ent-license.txt"
-$vrealizeLicenseAlias = "vRealizeSuite2019"
-
-# Set $importCert to $true to import your pre generated certs.
-# Configure the paths below to import your existing Certificates
-# If $false is selected, a wildcard certificate will be generated in vRSLCM
-$importCert = $false
-$PublicCertPath = "Y:\Certs\pub_bvrslcm.cer"
-$PrivateCertPath = "Y:\Certs\priv_bvrslcm.cer"
-$CertificateAlias = "vRealizeCertificate"
-
-#vCenter Variables
-$vCenterServer = "vcsamgmt.infrajedi.local"
-$vcenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
-$deployDatastore = "DS02-870EVO" #vSphere Datastore to use for deployment
-$deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
-$deployNetwork = "VMNet1"
-$deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
-
-#OVA Variables
-$ovaSourceType = "Local" # Local or NFS
-$ovaSourceLocation="/data/temp" #
-$ovaFilepath = $ovaSourceLocation
-if ($ovaSourceType -eq "NFS"){
-    $ovaSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where ova files are stored.
-	$ovaFilepath="/data/nfsfiles"
-}
-#write-host "value: $OVASourceType $ovaFilepath $OVASourceLocation"
-
-#VIDM Variables
-$deployVIDM = $true
-$vidmVmName = "bvidm"
-$vidmHostname = $vidmVMName + "." + $domain
-$vidmIp = "192.168.1.182"
-$vidmVersion = "3.3.7" # for example 3.3.4, 3.3.5 | vRA 8.3 (VIDM 3.3.4), 
-$vidmResize = $true #Note: Doing before vRA deployment will fail vRA8.6+ deployment
-
-#vRA Variables
-$deployvRA = $false
-$vraVmName = "bvra"
-$vraHostname = $vraVMName + "." + $domain
-$vraIp = "192.168.1.185"
-$vraVersion = "8.11.0" # for example 8.11.0,8.10.1
 
 ############################################################################
 ### Change intial vRSLCM admin password and create authentication header ###
@@ -133,16 +144,13 @@ $data=@"
 "@
 Invoke-RestMethod -Uri $uri -Headers $header -Method Put -Body $data
 
-#Login to vRSLCM with new password
-#Build Header, including authentication
+#Login to vRSLCM with new password. Build Header, including authentication
 $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $vrslcmUsername,$vrslcmAdminPassword)))
 $header = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $header.Add("Accept", 'application/json')
 $header.Add("Content-Type", 'application/json')
 $header.add("Authorization", "Basic $base64AuthInfo")
-
-#Login
-$uri = "https://$vrslcmHostname/lcm/authzn/api/login"
+$uri = "https://$vrslcmHostname/lcm/authzn/api/login" #Login
 Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 
 
@@ -266,6 +274,7 @@ try {
 $vCenterRequestId = $response.requestId
 
 # Check vCenter Creation Request
+$response =""
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$vCenterRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
@@ -288,6 +297,7 @@ Write-Host "vCenter creation and validation Status" $response.state -ForegroundC
 ### ADD DNS AND NTP SERVERS ###
 ###############################
 # Add NTP Server
+$response =""
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/ntp-servers"
 $data = @"
 {
@@ -305,6 +315,7 @@ try {
 }
 
 # Add DNS Server 1
+$response =""
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 $data = @"
 {
@@ -321,6 +332,7 @@ try {
     break
 }
 # Add DNS Server 2
+$response =""
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/settings/dns"
 $data = @"
 {
@@ -341,6 +353,7 @@ try {
 ##################################
 ### Add vRealize Suite License ###
 ##################################
+$response =""
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/license/validate-and-add"
 $data=@"
 {
@@ -386,14 +399,12 @@ $defaultLicenseLockerEntry="locker`:license`:$licenseId`:$vrealizeLicenseAlias" 
 #######################################################
 ### Import existing certificate or generate new one ###
 #######################################################
-
-# Import existing certificate if selected
-# Note the public certificate should have the complete chain.
-# All lines have to be joined together with \n in between and should end on \n
-# Rest of the body is Formatted in JSON format
+# Import existing certificate if $importCert is set to $true
+# Note the public certificate should have the complete certificate chain.
 if ($importCert -eq $true){
     $PublicCert = get-content $PublicCertPath
     $PrivateCert = get-content $PrivateCertPath
+    #join al lines together with \n in between and end with \n
     $FlatPrivateCert = ([string]::join("\n",($PrivateCert.Split("`n")))) + "\n"
     $FlatPublicCert = ([string]::join("\n",($PublicCert.Split("`n")))) + "\n"
     $certificateData=@"
@@ -404,6 +415,7 @@ if ($importCert -eq $true){
         "privateKey" : "$FlatPrivateCert"
     }
 "@
+    $response =""
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates/import"
     try {
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
@@ -459,6 +471,114 @@ elseif ($importCert -eq $false) {
     }
 $CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias" ##note the escape character
 
+
+################################################
+### Replace Aria Suite Lifecycle Certificate ###
+################################################
+
+if ($replaceLCMCert = $true){
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/environments/lcm/products/lcm/updatecertificate"
+    $body = @"
+{
+    "certificateVmId":"$certificateId",
+    "components":[]
+}
+"@
+    try {
+        $replaceLCMCertResponse = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $body
+    } catch {
+        write-host "Failed to replace Certificate for $CertificateAlias" -ForegroundColor red
+        Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+        Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+        break
+    }  
+    $replaceLCMCertRequestid = $replaceLCMCertResponse.requestId
+
+    # Check Certificate Replacement Progress
+    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$replaceLCMCertRequestid"
+    Write-Host "Certificate Replacement Started at" (get-date -format HH:mm)
+    #Write-Host "This will cause restart of Services"
+    $response=""
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 900
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "Certificate Replacement Status at " (get-date -format HH:mm) $response.state
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+        if ($response.state -eq "FAILED"){
+            Write-Host "FAILED Certificate Replacement " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+            Break
+        }
+    }
+    $timer.Stop()
+    Write-Host "Certificate Replacement " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+    }
+
+
+#################################
+### Import and Install PSPack ###
+#################################
+
+#Upload PSPACK##
+if ($installPSPack = $true) {
+    $form = @{
+    file = get-item -path $pspackfile}
+    $response =""
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/system-pspack/import"
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Form $form
+    $pspackRequestId = $response.requestId
+
+    # Check PSPACK UploadRequest
+    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$pspackRequestId"
+    $response =""
+    Write-Host "PSPack Upload Started at" (get-date -format HH:mm)
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 900
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "PSPack Upload Status at " (get-date -format HH:mm) $response.state
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+        if ($response.state -eq "FAILED"){
+            Write-Host "FAILED to Upload PSPack " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+            Break
+        }
+    }
+    $timer.Stop()
+    Write-Host "PSPPack Upload" (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+
+    # GET PSPack to retrieve PSPackId
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/system-pspack"
+    $pspackIdResponse = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $pspackId = $pspackIdResponse.pspackId
+
+    # Install PSPack
+    $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/system-pspack/$pspackId"
+    $pspackInstallResponse = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+    $pspackInstallResponse
+    $pspackInstallRequestId = $pspackInstallResponse.requestId
+
+    # Check PSPACK Install Progress
+    $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$pspackInstallRequestId"
+    Write-Host "PSPack Install Started at" (get-date -format HH:mm)
+    Write-Host "This will cause restart of Services"
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 900
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -eq "COMPLETED"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "PSPack Install Status at " (get-date -format HH:mm) $response.state
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+        if ($response.state -eq "FAILED"){
+            Write-Host "FAILED to Install PSPack " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+            Break
+        }
+    }
+    $timer.Stop()
+    Write-Host "PSPPack Install" (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
+    }
+# END Install PSPack
 
 
 #################################################
