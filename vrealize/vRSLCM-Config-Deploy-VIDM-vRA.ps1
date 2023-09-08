@@ -24,6 +24,7 @@
 # 21 Jan 2022 - Minor Updates
 # 26 Apr 2023 - 8.12 Changes
 # 23 Jun 2023 - Cleanup code
+# 08 Sep 2023 - Renamed vcenter variables.
 
 #################
 ### VARIABLES ###
@@ -61,7 +62,7 @@ $PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
 
 #vCenter Variables
-$vCenterServer = "vcsamgmt.infrajedi.local"
+$vcenterHostame = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 $deployDatastore = "DS02-870EVO" #vSphere Datastore to use for deployment
@@ -157,7 +158,7 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 ##############################################
 ### Connect to vCenter to get VM Folder Id ###
 ##############################################
-Connect-VIServer $vCenterServer -User $vcenterUsername -Password $vCenterPassword
+Connect-VIServer $vcenterHostame -User $vcenterUsername -Password $vCenterPassword
 $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
@@ -171,7 +172,7 @@ $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 $data=@"
 {
-    "alias" : "$vCenterServer",
+    "alias" : "$vcenterHostame",
     "password" : "$vCenterPassword",
     "passwordDescription" : "vCenter Admin password",
     "userName" : "$vcenterUsername"
@@ -186,7 +187,7 @@ try {
     break
 }
 $vc_vmid = $response.vmid
-$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterServer" #note the escape characters
+$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vcenterHostame" #note the escape characters
 
 # Create Default Installation account in Locker
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
@@ -256,8 +257,8 @@ Write-Host "Datacenter creation and validation Status" $response.state -Foregrou
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 $data=@"
 {
-    "vCenterHost" : "$vCenterServer",
-    "vCenterName" : "$vCenterServer",
+    "vCenterHost" : "$vcenterHostame",
+    "vCenterName" : "$vcenterHostame",
     "vcPassword" : "$vcPasswordLockerEntry",
     "vcUsedAs" : "MANAGEMENT_AND_WORKLOAD",
     "vcUsername" : "$vcenterUsername"
@@ -285,7 +286,7 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Write-Host "vCenter creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     if ($response.state -eq "FAILED"){
-        Write-Host "FAILED to add vCenter $vCenterServer at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Write-Host "FAILED to add vCenter $vcenterHostame at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
         Break
     }
 }
@@ -652,8 +653,8 @@ $vidmDeployJSON=@"
         "dataCenterVmid": "$dc_vmId",
         "regionName": "default",
         "zoneName": "default",
-        "vCenterName": "$vCenterServer",
-        "vCenterHost": "$vCenterServer",
+        "vCenterName": "$vcenterHostame",
+        "vCenterHost": "$vcenterHostame",
         "vcUsername": "$vcenterUsername",
         "vcPassword": "$vcPasswordLockerEntry",
         "acceptEULA": "true",
@@ -708,13 +709,13 @@ $vidmDeployJSON=@"
               "dns": "$dns1",
               "netmask": "$netmask",
               "contentLibraryItemId": "",
-              "vCenterHost": "$vCenterServer",
+              "vCenterHost": "$vcenterHostame",
               "cluster": "$deployCluster",
               "resourcePool": "",
               "network": "$deployNetwork",
               "storage": "$deployDatastore",
               "diskMode": "thin",
-              "vCenterName": "$vCenterServer",
+              "vCenterName": "$vcenterHostame",
               "vcUsername": "$vcenterUsername",
               "vcPassword": "$vcPasswordLockerEntry"
             }
@@ -811,8 +812,8 @@ $vraDeployJSON =@"
         "dataCenterVmid": "$dc_vmId",
         "regionName":"",
         "zoneName":"",
-        "vCenterName": "$vCenterServer",
-        "vCenterHost": "$vCenterServer",
+        "vCenterName": "$vcenterHostame",
+        "vCenterHost": "$vcenterHostame",
         "vcUsername": "$vcenterUsername",
         "vcPassword": "$vcPasswordLockerEntry",
         "acceptEULA": "true",
@@ -964,4 +965,4 @@ else {
 }
 
 
-DisConnect-VIServer $vCenterServer -Confirm:$false
+DisConnect-VIServer $vcenterHostame -Confirm:$false

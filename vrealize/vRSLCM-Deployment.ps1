@@ -16,6 +16,7 @@
 # 21 Jan 2022 - Minor Updates for 8.11 release
 # 26 Apr 2023 - Updates for 8.12 release.
 # 23 Jun 2023 - Some minor updates and fixes
+# 08 Sept 2023 - minor updates and fixes - Renamed variables
 
 #Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
 import-module -name Posh-SSH -ErrorAction Stop
@@ -24,9 +25,9 @@ import-module -name Posh-SSH -ErrorAction Stop
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "Z:\VMware\vRealize\vRA8\VMware-Aria-Automation-Lifecycle-Installer-21628956.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
-$copyVIDMOVA = $true # $true | $false
-$copyvRAOVA = $true # $true | $false
+$vrslcmIso = "Z:\VMware\vRealize\vRA8\VMware-Aria-Automation-Lifecycle-Installer-22003350.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
+$copyVIDMOVA = $false # $true | $false
+$copyvRAOVA = $false # $true | $false
 $ovaDestinationType = "VRSLCM" #VRSLCM or SMB/NFS
     #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
     #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
@@ -34,13 +35,13 @@ $share = "\\192.168.1.20\ISO\VMware\vRealize\latest\" # "<path to SMB/NFS share>
 $createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 # vCenter variables
-$vcenter = "vcsamgmt.infrajedi.local" #vcenter FQDN
-$vcUser = "administrator@vsphere.local"
-$vcPassword = "VMware01!" #vCenter password
+$vCenterHostname = "vcsamgmt.infrajedi.local" #vcenter FQDN
+$vCenterUsername = "administrator@vsphere.local"
+$vCenterPassword = "VMware01!" #vCenter password
 # General Configuration Parameters
 $cluster = "cls-mgmt"
 $network = "VMNet1"
-$datastore = "DS02-870EVO" #vSphere Datastore to use for deployment
+$datastore = "vmwnfs-m2ssd2"
 $vrslcmIp = "192.168.1.180" #vRSLCM IP Address
 $netmask = "255.255.255.0"
 $gateway = "192.168.1.1"
@@ -72,7 +73,7 @@ $vraOVAFilename = "vra.ova"
 
 
 # Connect to vCenter
-Connect-VIServer $vcenter -User $vcUser -Password $vcPassword -WarningAction SilentlyContinue
+Connect-VIServer $vCenterHostname -User $vCenterUsername -Password $vCenterPassword -WarningAction SilentlyContinue
 $vmhost = get-cluster $cluster | Get-VMHost | Select-Object -First 1
 
 #vRSLCM OVF Configuration Parameters
@@ -189,7 +190,7 @@ if ($createSnapshotOVA -eq $true){
 
 
 # Disconnect vCenter
-Disconnect-VIServer $vcenter -Confirm:$false
+Disconnect-VIServer $vCenterHostname -Confirm:$false
 
 # Unmount ISO
 DisMount-DiskImage $vrslcmIso -Confirm:$false |Out-Null
