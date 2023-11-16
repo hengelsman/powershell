@@ -1,6 +1,6 @@
 # Sample Script show various vRA REST calls
 # Henk Engelsman
-# 09 dec 2021
+# Lat Update 16 Nov 2023
 #
 # VMware Developer Documentation - APIs
 #   https://developer.vmware.com/apis
@@ -32,20 +32,19 @@ if ($PSEdition -eq 'Desktop') {
     }
 }
 
-
 #vRA VARIABLES
 $vraName = "bvra"
 $domain = "infrajedi.local"
 $vraHostname = $vraname+"."+$domain
 $vraUsername = "configadmin"
-$vraPassword = "VMware01!" #note use ` as escape character for special chars like $
+$vraPassword = "VMware1!" #note use ` as escape character for special chars like $
 $vraUserDomain = "System Domain" #Use "System Domain" for local users", otherwise use the AD domain.
 
 #vCenter (to add to vRA as CloudAccount) VARIABLES 
 $vcenterName = "vcsamgmt"
 $vcenterHostname = $vcenterName+"."+$domain
 $vcenterUsername = "administrator@vsphere.local"
-$vcenterPassword = "VMware01!"
+$vcenterPassword = "VMware11!"
 $vcenterDatacenter = "dc-mgmt" #Name of the vCenter datacenter object to add
 
 #Connect to vCenter to retrieve the datacenter id
@@ -95,7 +94,6 @@ $data =@{
 $uri = "https://$vraHostname/iaas/api/login"
 try {
     $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
-    $response
 } catch {
     write-host "Failed to Connect to host: $vraHostname" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -245,15 +243,6 @@ $vROPSJSON=@"
 "@
 
 
-
-
-
-
-
-
-
-
-
 #Get vSphere Cloud Accounts
 $uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
@@ -401,9 +390,6 @@ $uri = "https://$vraHostname/iaas/api/flavors"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $response.content
 
-
-
-
 #Get Flavor Profiles
 $uri = "https://$vraHostname/iaas/api/flavor-profiles"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
@@ -466,7 +452,6 @@ $data = @"
 }
 "@
 Invoke-RestMethod -Method Post -Uri $uri -Headers $header
-
 
 
 
