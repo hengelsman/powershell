@@ -25,6 +25,14 @@
 #################
 ### VARIABLES ###
 #################
+
+#vCenter Variables
+$vCenterHostname = "vcsamgmt.infrajedi.local"
+$vcenterUsername = "administrator@vsphere.local"
+$vCenterPassword = "VMware01!"
+$createSnapshot = $true
+
+#vRSLCM Variables
 $vrslcmVmname = "bvrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
@@ -33,7 +41,7 @@ $vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $installPSPack = $true
-$pspackfile = "z:\VMware\vRealize\vRSLCM\vrlcm-8.12.0-PSPACK3.pspak"
+$pspackfile = "z:\VMware\vRealize\vRSLCM\vrlcm-8.12.0-PSPACK8.pspak"
 $dns1 = "172.16.1.11"
 $dns2 = "172.16.1.12"
 $ntp1 = "192.168.1.1"
@@ -52,11 +60,6 @@ $replaceLCMCert = $true
 $PublicCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard.pem"
 $PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
-
-#vCenter Variables
-$vCenterServer = "vcsamgmt.infrajedi.local"
-$vcenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
 
 
 ### Start Skip Certificate Checks ###
@@ -123,7 +126,7 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 $data=@"
 {
-    "alias" : "$vCenterServer",
+    "alias" : "$vCenterHostname",
     "password" : "$vCenterPassword",
     "passwordDescription" : "vCenter Admin password",
     "userName" : "$vcenterUsername"
@@ -138,7 +141,7 @@ try {
     break
 }
 $vc_vmid = $response.vmid
-$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterServer" #note the escape characters
+$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterHostname" #note the escape characters
 
 
 #####################################
@@ -190,8 +193,8 @@ $response =""
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 $data=@"
 {
-    "vCenterHost" : "$vCenterServer",
-    "vCenterName" : "$vCenterServer",
+    "vCenterHost" : "$vCenterHostname",
+    "vCenterName" : "$vCenterHostname",
     "vcPassword" : "$vcPasswordLockerEntry",
     "vcUsedAs" : "MANAGEMENT_AND_WORKLOAD",
     "vcUsername" : "$vcenterUsername"
@@ -219,7 +222,7 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Write-Host "vCenter creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     if ($response.state -eq "FAILED"){
-        Write-Host "FAILED to add vCenter $vCenterServer at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Write-Host "FAILED to add vCenter $vCenterHostname at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
         Break
     }
 }
@@ -452,6 +455,15 @@ if ($replaceLCMCert = $true){
 ### Import and Install PSPack ###
 #################################
 
+# Create Snapshot of vRSLCM VM
+Connect-VIServer $vCenterHostname -User $vcenterUsername -Password $vCenterPassword -WarningAction SilentlyContinue
+if ($createSnapshot -eq $true){
+    Write-Host "Create Snapshot before installing PSPack" -ForegroundColor White -BackgroundColor DarkGreen
+    New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Pre PSPack Install Snapshot"
+}
+Disconnect-VIServer $vCenterHostname -Confirm:$false
+
+
 #Upload PSPACK##
 if ($installPSPack = $true) {
     $form = @{
@@ -488,7 +500,6 @@ if ($installPSPack = $true) {
     # Install PSPack
     $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/system-pspack/$pspackId"
     $pspackInstallResponse = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
-    $pspackInstallResponse
     $pspackInstallRequestId = $pspackInstallResponse.requestId
 
     # Check PSPACK Install Progress
@@ -514,3 +525,15 @@ if ($installPSPack = $true) {
 
 
 
+$uri = "https://$vrslcmHostname/lcm/health/api/v2/status"
+    Write-Host "Waiting for vRSLCM Services"
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    $Timeout = 900
+    $timer = [Diagnostics.Stopwatch]::StartNew()
+    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.'vrlcm-server' -eq "UP"))) {
+        Start-Sleep -Seconds 60
+        Write-Host "vRSLCM Server Status at " (get-date -format HH:mm) $response.'vrlcm-server'
+        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+    }
+    $timer.Stop()
+    Write-Host "vRSLCM Server Status" (get-date -format HH:mm) $response.'vrlcm-server' -ForegroundColor Black -BackgroundColor Green

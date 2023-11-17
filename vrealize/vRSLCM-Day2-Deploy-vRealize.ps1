@@ -18,12 +18,10 @@ $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interf
 $vrlscmPassword = "VMware01!" #the NEW admin@local password to set
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
-#$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
-#$vrslcmDcLocation = "Rotterdam, South Holland, NL"
-$vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
+$vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
 
-$dns1 = "192.168.1.204"
-$dns2 = "192.168.1.205"
+$dns1 = "172.16.1.11"
+$dns2 = "172.16.1.12"
 $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
@@ -39,32 +37,59 @@ $vCenterServer = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
 $vCenterPassword = "VMware01!"
 
-#$nfsSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vidm.ova and vra.ova are stored.
-$deployDatastore = "DS01-870EVO" #vSphere Datastore to use for deployment
+#$nfsSourceLocation="192.168.1.20:/ssd1/ISO2/vRealize/latest" #NFS location where vidm.ova and vra.ova are stored.
+$deployDatastore = "DS00-860EVO" #vSphere Datastore to use for deployment
 $deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
 $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 
 $deployvRA = $false
-$vraNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vRLI ova is stored.
+$vraNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where vRLI ova is stored.
 $vraVmName = "bvra"
 $vraHostname = $vraVMName + "." + $domain
 $vraIp = "192.168.1.185"
-$vraVersion = "8.11.0"
+$vraVersion = "8.13.1"
 
-$deployvRLI = $true
-$vrliNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vRLI ova is stored.
+$deployvRLI = $false
+$vrliNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/vRLI" #NFS location where vRLI ova is stored.
 $vrliVmName = "bvrli"
 $vrliHostname = $vrliVmName + "." + $domain
 $vrliIp = "192.168.1.186"
-$vrliVersion = "8.10.0"
+$vrliVersion = "8.12.0"
 
 $deployvROPS = $true
-$vropsNFSSourceLocation="192.168.1.10:/ssd1/ISO2/vRealize/latest" #NFS location where vROPS ova is stored.
+$vropsNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/vROPS" #NFS location where vROPS ova is stored.
 $vropsVmName = "bvrops"
 $vropsHostname = $vropsVmName + "." + $domain
 $vropsIp = "192.168.1.187"
-$vropsVersion = "8.10.1"
+$vropsVersion = "8.12.1"
+
+### Start Skip Certificate Checks ###
+if ($PSEdition -eq 'Core') {
+  $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
+}
+
+if ($PSEdition -eq 'Desktop') {
+  # Enable communication with self signed certs when using Windows Powershell
+  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+
+  if ("TrustAllCertificatePolicy" -as [type]) {} else {
+      Add-Type @"
+using System.Net;
+  using System.Security.Cryptography.X509Certificates;
+  public class TrustAllCertificatePolicy : ICertificatePolicy {
+      public TrustAllCertificatePolicy() {}
+  public bool CheckValidationResult(
+          ServicePoint sPoint, X509Certificate certificate,
+          WebRequest wRequest, int certificateProblem) {
+          return true;
+      }
+}
+"@
+      [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertificatePolicy
+  }
+}
+### End Skip Certificate Checks ###
 
 
 ############################################################################

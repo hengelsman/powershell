@@ -1,16 +1,15 @@
 # Sample Script show various vRA REST calls
 # Henk Engelsman
-# Lat Update 16 Nov 2023
+# Last Update 16 Nov 2023
 #
 # VMware Developer Documentation - APIs
 #   https://developer.vmware.com/apis
-# vRealize Automation 8.6 API Programming Guide
-#   https://developer.vmware.com/docs/14701/GUID-56F0E471-0FD7-4C5C-BB4B-A68E95810645.html
-#
+# Aria Automation API Programming Guide
+#   https://developer.vmware.com/docs/18201/
+
 if ($PSEdition -eq 'Core') {
     $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
 }
-
 if ($PSEdition -eq 'Desktop') {
     # Enable communication with self signed certs when using Windows Powershell
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
@@ -33,19 +32,21 @@ if ($PSEdition -eq 'Desktop') {
 }
 
 #vRA VARIABLES
-$vraName = "bvra"
+$vraName = "vra"
 $domain = "infrajedi.local"
 $vraHostname = $vraname+"."+$domain
 $vraUsername = "configadmin"
-$vraPassword = "VMware1!" #note use ` as escape character for special chars like $
+$vraPassword = "VMware01!" #note use ` as escape character for special chars like $
 $vraUserDomain = "System Domain" #Use "System Domain" for local users", otherwise use the AD domain.
 
 #vCenter (to add to vRA as CloudAccount) VARIABLES 
 $vcenterName = "vcsamgmt"
 $vcenterHostname = $vcenterName+"."+$domain
 $vcenterUsername = "administrator@vsphere.local"
-$vcenterPassword = "VMware11!"
+$vcenterPassword = "VMware01!"
 $vcenterDatacenter = "dc-mgmt" #Name of the vCenter datacenter object to add
+$vcenterCluster = "cls-mgmt"
+$vcenterDeploymentFolder = "vRADeployments"
 
 #Connect to vCenter to retrieve the datacenter id
 Connect-VIServer $vcenterHostname -User $vcenterUsername -Password $vcenterPassword
@@ -134,13 +135,198 @@ $vCenterJSON = @"
 "@
 
 $uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere"
-$vCenterCloudAccount = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vCenterJSON
+try {
+    $vCenterCloudAccount = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $vCenterJSON
+} catch {
+    write-host "Failed to create Cloud Account on host: $vraHostname" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
 $vCenterCloudAccountId = $vCenterCloudAccount.id
-$vCenterCloudAccountId
+
+
+# Get RegionId
+$response=""
+$uri = "https://$vraHostname/iaas/api/regions"
+try {
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+} catch {
+    write-host "Failed to retreive Regions" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+$regionId = $response.content.id
+
+
+##################################################
+# Create Cloud Zone - Option 1                   #
+# including all clusters from vSphere datacenter #
+##################################################
+# tags the Cloud Zone (example)
+$cloudzoneName = "cz-mgmt"
+$cloudZoneDescription = "Cloudzone for $cloudzoneName"
+$cloudzoneJSON = @"
+{
+    "name": "$cloudzoneName",
+    "description": "$cloudZoneDescription",
+    "regionId": "$regionId",
+    "tags": [
+        {
+            "key": "cz",
+            "value": "mgmt"
+        }
+    ],
+	"folder": "$vcenterDeploymentFolder",
+    "placementPolicy": "DEFAULT"
+}
+"@
+$uri = "https://$vraHostname/iaas/zones"
+try {
+    $cloudZone = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $cloudzoneJSON
+} catch {
+    write-host "Failed to create Cloudzone $cloudzoneName" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+
+
+
+##################################################
+# Create Cloud Zone - Option 2                   #
+# Dynamically include compute by tags on Cluster #
+##################################################
+
+# If you did not set tags in vCenter on the cluster, you can set tags in vRA.
+# First Get vSphere Cluster (Fabric Computes) id by name
+$uri = "https://$vraHostname/iaas/api/fabric-computes?`$filter=name eq '$vcenterCluster'"
+try {
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+} catch {
+    write-host "Failed to retrieve clusters" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+$response.content
+$fabricExternalId = $response.content.externalId
+$fabricId = $response.content.id
+
+# Tag a vSphere Cluster in Aria Automation
+$clusterTagJSON =@"
+{
+    "tags": [
+        {
+            "key": "cz",
+            "value": "mgmt"
+        }
+    ]
+}
+"@
+$uri = "https://$vraHostname/iaas/api/fabric-computes/$fabricId"
+try {
+    $response = Invoke-RestMethod -Method Patch -Uri $uri -Headers $header -Body $clusterTagJSON
+} catch {
+    write-host "Failed to set Tags on Cluster: $clusterName" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+
+# Create the Tag based Cloudzone
+$cloudzoneName = "cz-mgmt"
+$cloudZoneDescription = "Cloudzone for $cloudzoneName"
+$cloudzoneJSON = @"
+{
+    "name": "$cloudzoneName",
+    "description": "$cloudZoneDescription",
+    "regionId": "$regionId",
+	"tagsToMatch": [
+		{
+		  "key": "cz",
+		  "value": "mgmt"
+		}
+	  ],
+	"folder": "$vcenterDeploymentFolder",
+    "placementPolicy": "DEFAULT"
+}
+"@
+$uri = "https://$vraHostname/iaas/zones"
+try {
+    $cloudZone = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $cloudzoneJSON
+} catch {
+    write-host "Failed to create Cloudzone $cloudzoneName" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
 
 
 
 
+##################################################
+# Create Cloud Zone - Option 3                   #
+# Manually include compute by tags on Cluster    #
+##################################################
+# First Get vSphere Cluster (Fabric Computes) id by name
+$uri = "https://$vraHostname/iaas/api/fabric-computes?`$filter=name eq '$vcenterCluster'"
+try {
+    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+} catch {
+    write-host "Failed to retrieve clusters" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+$fabricId = $response.content.id
+
+$cloudzoneName = "cz-mgmt"
+$cloudZoneDescription = "Cloudzone for $cloudzoneName"
+$cloudzoneJSON = @"
+{
+    "name": "$cloudzoneName",
+    "description": "$cloudZoneDescription",
+    "regionId": "$regionId",
+    "tags": [
+        {
+            "key": "cz",
+            "value": "mgmt"
+        }
+    ],
+    "placementPolicy": "DEFAULT",
+    "folder": "$vcenterDeploymentFolder",
+    "computeIds": [$fabricId]
+}
+"@
+$uri = "https://$vraHostname/iaas/zones"
+try {
+    $cloudZone = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $cloudzoneJSON
+} catch {
+    write-host "Failed to create Cloudzone $cloudzoneName" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+
+
+
+
+
+
+
+
+
+
+## Retrieve Cloud Zone
+$uri = "https://$vraHostname/iaas/api/zones/"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$response.content
+
+
+
+<#
 ####################################
 #   Create Infoblox Integration    #
 ####################################
@@ -452,6 +638,27 @@ $data = @"
 }
 "@
 Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+#>
+
+
+#Get vSphere Cloud Regions
+$response=""
+$uri = "https://$vraHostname/iaas/api/cloud-accounts-vsphere/region-enumeration"
+$data=@"
+{
+	"hostName": "$vcenterHostname",
+	"acceptSelfSignedCertificate": true,
+	"password": "$vcenterPassword",
+	"dcid": "$vcenterDatacenterIdFormatted",
+	"cloudAccountId": "$vCenterCloudAccountId",
+	"username": "$vcenterUsername"
+}
+"@
+$response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
+$response
+
+$response.externalRegions.name
+$vraRegionId = $response.externalRegions.externalRegionId
 
 
 

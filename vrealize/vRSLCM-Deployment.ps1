@@ -17,6 +17,7 @@
 # 26 Apr 2023 - Updates for 8.12 release.
 # 23 Jun 2023 - Some minor updates and fixes
 # 08 Sept 2023 - minor updates and fixes - Renamed variables
+# 24 Okt 2023 - Bugfix in .ova copy parts
 
 #Posh-SSH Module is required if you want to copy vra and vidm ova files to vRSLCM appliance
 import-module -name Posh-SSH -ErrorAction Stop
@@ -32,7 +33,7 @@ $ovaDestinationType = "VRSLCM" #VRSLCM or SMB/NFS
     #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
     #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
 $share = "\\192.168.1.20\ISO\VMware\vRealize\latest\" # "<path to SMB/NFS share>"
-$createSnapshotPreboot = $false # $true|$false to create a snapshot after initial deployment.
+$createSnapshotPreboot = $true # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 # vCenter variables
 $vCenterHostname = "vcsamgmt.infrajedi.local" #vcenter FQDN
@@ -41,14 +42,14 @@ $vCenterPassword = "VMware01!" #vCenter password
 # General Configuration Parameters
 $cluster = "cls-mgmt"
 $network = "VMNet1"
-$datastore = "vmwnfs-m2ssd2"
+$datastore = "DS00-860EVO"
 $vrslcmIp = "192.168.1.180" #vRSLCM IP Address
-$netmask = "255.255.255.0"
-$gateway = "192.168.1.1"
-$dns = "172.16.1.11,172.16.1.12" # DNS Servers, Comma separated
-$domain = "infrajedi.local" #dns domain name
+$vrslcmNetmask = "255.255.255.0"
+$vrslcmGateway = "192.168.1.1"
+$vrslcmDns = "172.16.1.11,172.16.1.12" # DNS Servers, Comma separated
+$vrslcmDomain = "infrajedi.local" #dns domain name
 $vrslcmVmname = "bvrslcm" #vRSLCM VM Name
-$vrslcmHostname = $vrslcmVmname+"."+$domain #joins vmname and domain variable to generate fqdn
+$vrslcmHostname = $vrslcmVmname+"."+$vrslcmDomain #joins vmname and domain variable to generate fqdn
 $vrlscmRootPassword = "VMware01!" #Note this is the root password, Not the admin@local password which is "vmware" by default
 $ntp = "192.168.1.1"
 $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
@@ -92,12 +93,12 @@ $ovfconfig.Common.va_ntp_servers.Value = $ntp
 #$ovfconfig.Common.vlcm.cert.countrycode.Value = "NL"
 #end optional certificate settings
 $vAppProductname = ($ovfconfig.vami |Get-Member |Where-Object {$_.MemberType -like "CodeProperty"} |Select-Object Name).name
-$ovfconfig.vami.$vAppProductname.gateway.Value = $gateway
-$ovfconfig.vami.$vAppProductname.domain.Value = $domain
-#$ovfconfig.vami.$vAppProductname.searchpath.Value = $domain #Not configurable in 8.12
-$ovfconfig.vami.$vAppProductname.DNS.Value = $dns
+$ovfconfig.vami.$vAppProductname.gateway.Value = $vrslcmGateway
+$ovfconfig.vami.$vAppProductname.domain.Value = $vrslcmDomain
+#$ovfconfig.vami.$vAppProductname.searchpath.Value = $vrslcmDomain #Not configurable in 8.12
+$ovfconfig.vami.$vAppProductname.DNS.Value = $vrslcmDns
 $ovfconfig.vami.$vAppProductname.ip0.Value = $vrslcmIp
-$ovfconfig.vami.$vAppProductname.netmask0.Value = $netmask
+$ovfconfig.vami.$vAppProductname.netmask0.Value = $vrslcmNetmask
 #$ovfconfig.IpAssignment.IpProtocol.Value = "IPv4" #string["IPv4", "IPv6"]    #Not configurable in 8.12
 $ovfconfig.NetworkMapping.Network_1.Value = $network
 
@@ -142,11 +143,11 @@ do {
 if ($copyVIDMOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
         Write-Host "VIDM OVA will be copied to SMB/NFS share $share" -ForegroundColor White -BackgroundColor DarkGreen
-        If (Test-Path ("$share$vidmOVAFilename")){
+        If (Test-Path ("$share$vidmOVAFilename") -PathType Leaf){
             Write-Host "VIDM ova File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$share$vidmOVAFilename") -Destination ("$share$vidmOVAFilename"+".bak") -Force
         }
-        Start-BitsTransfer -source "$vidmOvaPath$vidmOVAFilename" -Destination $share
+        Start-BitsTransfer -source "$OvaPath$vidmOVAFilename" -Destination $share
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
         Write-Host "VIDM OVA will be copied to vRSLCM Local disk in /data" -ForegroundColor White -BackgroundColor DarkGreen
@@ -164,11 +165,11 @@ elseif ($copyVIDMOVA -eq $false) {
 if ($copyvRAOVA -eq $true){
     if ($ovaDestinationType -eq "NFS") {
         Write-Host "vRA OVA will be copied to NFS share $share" -ForegroundColor White -BackgroundColor DarkGreen
-        If (Test-Path ("$share$vraOva")){
+        If (Test-Path ("$share$vraOva") -pathtype Leaf){
             Write-Host "vRA OVA File exists and will be renamed" -ForegroundColor black -BackgroundColor Yellow
             Move-Item ("$share$vraOVAFilename") -Destination ("$share$vraOVAFilename"+".bak") -Force
         }
-        Start-BitsTransfer -source $vraOvaPath -Destination $share
+        Start-BitsTransfer -source "$OvaPath$vraOVAFilename" -Destination $share
     }
     elseif ($ovaDestinationType -eq "VRSLCM") {
         Write-Host "vRA OVA will be copied to vRSLCM Local disk in /data" -ForegroundColor White -BackgroundColor DarkGreen

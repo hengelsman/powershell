@@ -33,7 +33,7 @@ $vrslcmDefaultAccountPassword = "VMware01!"
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
-$vrslcmProdEnv = "vRealize" #Name of the vRSLCM Environment where vRA is deployed
+$vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
 
 $dns1 = "192.168.1.204"
 $dns2 = "192.168.1.205"

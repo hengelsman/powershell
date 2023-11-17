@@ -4,13 +4,12 @@
 #
 # VMware Developer Documentation - APIs
 #   https://developer.vmware.com/apis
-# vRealize Automation 8.6 API Programming Guide
-#   https://developer.vmware.com/docs/14701/GUID-56F0E471-0FD7-4C5C-BB4B-A68E95810645.html
-#
+# Aria Automation API Programming Guide
+#   https://developer.vmware.com/docs/18201/
+
 if ($PSEdition -eq 'Core') {
     $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
 }
-
 if ($PSEdition -eq 'Desktop') {
     # Enable communication with self signed certs when using Windows Powershell
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
