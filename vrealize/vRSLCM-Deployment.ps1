@@ -26,33 +26,33 @@ import-module -name Posh-SSH -ErrorAction Stop
 ### VARIABLES ###
 #################
 # Path to EasyInstaller ISO
-$vrslcmIso = "Z:\VMware\vRealize\vRA8\VMware-Aria-Automation-Lifecycle-Installer-22003350.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
+$vrslcmIso = "Z:\VMware-Aria-Automation-Lifecycle-Installer-22003350.iso" # "<path to iso file>". See https://kb.vmware.com/s/article/2143850
 $copyVIDMOVA = $false # $true | $false
 $copyvRAOVA = $false # $true | $false
 $ovaDestinationType = "VRSLCM" #VRSLCM or SMB/NFS
     #Choose VRSLCM to copy the OVA files to VRSLCM via SSH
     #Choose NFS to copy the OVA files to SMB/NFS BitsTransfer
-$share = "\\192.168.1.20\ISO\VMware\vRealize\latest\" # "<path to SMB/NFS share>"
+$share = "\\192.168.1.2\VMware\Aria\" # "<path to SMB/NFS share>"
 $createSnapshotPreboot = $true # $true|$false to create a snapshot after initial deployment.
 $createSnapshotOVA = $false # $true|$false to create a snapshot after OVA files have been copied to vRSLCM.
 # vCenter variables
-$vCenterHostname = "vcsamgmt.infrajedi.local" #vcenter FQDN
+$vCenterHostname = "vcenter.domain.local" #vcenter FQDN
 $vCenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!" #vCenter password
+$vCenterPassword = "VMware1!" #vCenter password
 # General Configuration Parameters
-$cluster = "cls-mgmt"
-$network = "VMNet1"
+$cluster = "mycluster"
+$network = "VM Network"
 $datastore = "DS00-860EVO"
-$vrslcmIp = "192.168.1.180" #vRSLCM IP Address
+$vrslcmIp = "192.168.1.120" #vRSLCM IP Address
 $vrslcmNetmask = "255.255.255.0"
 $vrslcmGateway = "192.168.1.1"
-$vrslcmDns = "172.16.1.11,172.16.1.12" # DNS Servers, Comma separated
-$vrslcmDomain = "infrajedi.local" #dns domain name
-$vrslcmVmname = "bvrslcm" #vRSLCM VM Name
+$vrslcmDns = "192.168.1.111,192.168.1.112" # DNS Servers, Comma separated
+$vrslcmDomain = "domain.local" #dns domain name
+$vrslcmVmname = "vrslcm" #vRSLCM VM Name
 $vrslcmHostname = $vrslcmVmname+"."+$vrslcmDomain #joins vmname and domain variable to generate fqdn
 $vrlscmRootPassword = "VMware01!" #Note this is the root password, Not the admin@local password which is "vmware" by default
 $ntp = "192.168.1.1"
-$vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
+$vmFolder = "Aria" #VM Foldername to place the vm.
 #$vAppProductname = "VMware_Aria_Suite_Lifecycle_Appliance" #For Pre 8.12 releases, use "VMware_vRealize_Suite_Life_Cycle_Manager_Appliance". #Replaced with dynamic option in the ovf properties part
 
 
@@ -63,7 +63,7 @@ $vmFolder = "vRealize-Beta" #VM Foldername to place the vm.
 # Mount the Iso and extract ova paths
 # Or Remark the part below and configure the path to the vRLCM ova file
 #$vrslcmOva = "C:\temp\vrlcm\VMware-vLCM-Appliance-8.10.0.6-20590142_OVF10.ova"
-$mountResult = Mount-DiskImage $vrslcmIso -PassThru -ErrorAction Stop
+$mountResult =s Mount-DiskImage $vrslcmIso -PassThru -ErrorAction Stop
 Start-sleep -Seconds 5
 $driveletter = ($mountResult | Get-Volume).DriveLetter
 $vrslcmOvaPath = $driveletter + ":\" + "vrlcm\"
@@ -188,7 +188,6 @@ if ($createSnapshotOVA -eq $true){
     Write-Host "Create Snapshot with ova files (if selected)" -ForegroundColor White -BackgroundColor DarkGreen
     New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Snapshot" -Description "vRSLCM Snapshot"
 }
-
 
 # Disconnect vCenter
 Disconnect-VIServer $vCenterHostname -Confirm:$false

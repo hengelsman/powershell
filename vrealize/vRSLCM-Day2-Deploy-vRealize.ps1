@@ -1,93 +1,125 @@
-# Powershell Script to deploy vRealize components after initial vRSLCM and VIDM Deployment
-# 
+# Powershell script to Deploy single node vRA, vROPS, vRLI.
+#
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
+# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 #
 # Henk Engelsman - https://www.vtam.nl
-# 2021/12/29 - Initial version based on other/previous scripts.
-# 21 Jan 2023 - Minor Updates
+# 29 Nov 2022
+
 
 #################
 ### VARIABLES ###
 #################
-$vrslcmVmname = "bvrslcm"
-$domain = "infrajedi.local"
+$vrslcmVmname = "vrslcm"
+$domain = "domain.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrlscmPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to be set for vRSLCM. default is vmware and needs to be changed at first login
 $vrslcmDefaultAccount = "configadmin"
+$vrslcmDefaultAccountPassword = "VMware01!" #Password used for the default installation account for products
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
+$vrslcmDcName = "my-vrslcm-dc" #vRSLCM Datacenter Name
+$vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
-
-$dns1 = "172.16.1.11"
-$dns2 = "172.16.1.12"
+$dns1 = "192.168.1.111"
+$dns2 = "192.168.1.112"
 $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
+$installPSPack = $false
+$pspackfile = "Z:\VMware\Aria\vrlcm-8.14.0-PSPACK3.pspak"
 
+#Get Licence key from file or manually enter key below
+#$vrealizeLicense = "ABCDE-01234-FGHIJ-56789-KLMNO"
+$vrealizeLicense = Get-Content "Z:\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
+# Set $importCert to $true to import your pre generated certs.
+# I have used a wildcard cert here, which will be used for VIDM and vRA (not a best practice)
+# Configure the paths below to import your existing Certificates
+# If $importCert = $false is used, a wildcard certificate will be generated in vRSLCM
+$importCert = $true
 $CertificateAlias = "vRealizeCertificate"
-$vCenterServer = "vcsamgmt.infrajedi.local"
-$vCenterAccount = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
 
-$vCenterServer = "vcsamgmt.infrajedi.local"
+#vCenter Variables
+$vcenterHostname = "vcenter.domain.local"
 $vcenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
+$vcenterPassword = "VMware01!"
+$deployDatastore = "Datastore01" #vSphere Datastore to use for deployment
+$deployCluster = "datacenter#cluster" #vSphere Cluster - Notation <datacenter>#<cluster>. Example dc-mgmt#cls-mgmt
+$deployNetwork = "VM Network"
+$deployVmFolderName = "Aria" #vSphere VM Folder Name
 
-#$nfsSourceLocation="192.168.1.20:/ssd1/ISO2/vRealize/latest" #NFS location where vidm.ova and vra.ova are stored.
-$deployDatastore = "DS00-860EVO" #vSphere Datastore to use for deployment
-$deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
-$deployNetwork = "VMNet1"
-$deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
+#OVA Variables
+$ovaSourceType = "Local" # Local or NFS
+$ovaSourceLocation="/data" #
+$ovaFilepath = $ovaSourceLocation
+if ($ovaSourceType -eq "NFS"){
+  $ovaSourceLocation="192.168.1.2:/ISO/Aria/latest" #NFS location where ova files are stored.
+	$ovaFilepath="/data/nfsfiles"
+}
 
+#VIDM Variables
+<#
+$deployVIDM = $true
+$vidmVmName = "vidm"
+$vidmHostname = $vidmVMName + "." + $domain
+$vidmIp = "192.168.1.130"
+$vidmVersion = "3.3.7"
+$vidmResize = $false #if set to $true, resizes VIDM to 2 vCPU 8GB RAM. Unsupported option for prod. works in lab.
+#>
+
+#vRA Variables
 $deployvRA = $false
-$vraNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where vRLI ova is stored.
-$vraVmName = "bvra"
+$vraVmName = "vra"
 $vraHostname = $vraVMName + "." + $domain
-$vraIp = "192.168.1.185"
-$vraVersion = "8.13.1"
+$vraIp = "192.168.1.140"
+$vraVersion = "8.14.1"
 
+#vRLI Variables
 $deployvRLI = $false
-$vrliNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/vRLI" #NFS location where vRLI ova is stored.
-$vrliVmName = "bvrli"
+$vrliNFSSourceLocation=$nfsSourceLocation #NFS location where vRLI ova is stored.
+$vrliVmName = "vrli"
 $vrliHostname = $vrliVmName + "." + $domain
-$vrliIp = "192.168.1.186"
-$vrliVersion = "8.12.0"
+$vrliIp = "192.168.1.150"
+$vrliVersion = "8.14.1"
 
-$deployvROPS = $true
-$vropsNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/vROPS" #NFS location where vROPS ova is stored.
-$vropsVmName = "bvrops"
+#vROPS Variables
+$deployvROPS = $false
+$vropsNFSSourceLocation=$nfsSourceLocation #NFS location where vROPS ova is stored.
+$vropsVmName = "vrops"
 $vropsHostname = $vropsVmName + "." + $domain
-$vropsIp = "192.168.1.187"
-$vropsVersion = "8.12.1"
+$vropsIp = "192.168.1.160"
+$vropsVersion = "8.14.1"
+
+### END VARIABLES ###
 
 ### Start Skip Certificate Checks ###
 if ($PSEdition -eq 'Core') {
-  $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
+    $PSDefaultParameterValues.Add("Invoke-RestMethod:SkipCertificateCheck", $true)
 }
 
 if ($PSEdition -eq 'Desktop') {
-  # Enable communication with self signed certs when using Windows Powershell
-  [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
+    # Enable communication with self signed certs when using Windows Powershell
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;
 
-  if ("TrustAllCertificatePolicy" -as [type]) {} else {
-      Add-Type @"
-using System.Net;
-  using System.Security.Cryptography.X509Certificates;
-  public class TrustAllCertificatePolicy : ICertificatePolicy {
-      public TrustAllCertificatePolicy() {}
-  public bool CheckValidationResult(
-          ServicePoint sPoint, X509Certificate certificate,
-          WebRequest wRequest, int certificateProblem) {
-          return true;
-      }
-}
+    if ("TrustAllCertificatePolicy" -as [type]) {} else {
+        Add-Type @"
+	using System.Net;
+    using System.Security.Cryptography.X509Certificates;
+    public class TrustAllCertificatePolicy : ICertificatePolicy {
+        public TrustAllCertificatePolicy() {}
+		public bool CheckValidationResult(
+            ServicePoint sPoint, X509Certificate certificate,
+            WebRequest wRequest, int certificateProblem) {
+            return true;
+        }
+	}
 "@
-      [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertificatePolicy
-  }
+        [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertificatePolicy
+    }
 }
 ### End Skip Certificate Checks ###
 
@@ -145,6 +177,7 @@ $vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
 #The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
 $deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
 Write-Host "vCenter Deployment Folder id: " $deployVmFolderName -BackgroundColor Green -ForegroundColor Black
+
 
 ###################
 ### DEPLOY VRLi ###
@@ -682,29 +715,3 @@ else {
   Write-Host "vROPS Deployment Status at " (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green    
 }
 }
-
-
-
-
-# Allow Selfsigned certificates in powershell
-Function Unblock-SelfSignedCert() {
-if ([System.Net.ServicePointManager]::CertificatePolicy -notlike 'TrustAllCertsPolicy') {
-    Add-Type -TypeDefinition @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-    public class TrustAllCertsPolicy : ICertificatePolicy {
-        public bool CheckValidationResult(
-            ServicePoint srvPoint, X509Certificate certificate,
-            WebRequest request, int certificateProblem) {
-            return true;
-        }
-    }
-"@
-    [System.Net.ServicePointManager]::CertificatePolicy = New-Object -TypeName TrustAllCertsPolicy
-    }
-}
-
-Unblock-SelfSignedCert #run above function to unblock selfsigned certs
-
-#Use TLS 1.2 for REST calls
-[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12;

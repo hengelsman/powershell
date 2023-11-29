@@ -16,16 +16,18 @@
 #vCenter Variables
 $vCenterHostname = "vcsamgmt.infrajedi.local"
 $vcenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
+$vCenterPassword = "VMware1!"
 $createSnapshot = $true
 
 #vRSLCM Variables
-$vrslcmVmname = "bvrslcm"
+$vrslcmVmname = "vrslcm"
 $domain = "infrajedi.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
 $vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
-$pspackfile = "z:\VMware\vRealize\vRSLCM\vrlcm-8.12.0-PSPACK8.pspak"
+$installPSPack = $false
+$pspackfile = "Z:\VMware\Aria\vrlcm-8.14.0-PSPACK3.pspak"
+
 
 ### Start Skip Certificate Checks ###
 if ($PSEdition -eq 'Core') {

@@ -40,7 +40,7 @@ $deployNetwork = "VMNet1"
 $deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
 
 $deployvROPS = $true
-$vropsNFSSourceLocation="192.168.1.20:/ISO/VMware/vRealize/vROPS" #NFS location where vROPS ova is stored.
+$vropsNFSSourceLocation="192.168.1.2:/VMware/vRealize/vROPS" #NFS location where vROPS ova is stored.
 $vropsVmName = "bvrops"
 $vropsHostname = $vropsVmName + "." + $domain
 $vropsIp = "192.168.1.187"

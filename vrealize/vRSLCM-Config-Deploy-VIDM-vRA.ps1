@@ -3,6 +3,7 @@
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
+# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
 #
 # Henk Engelsman - https://www.vtam.nl
 # 29 Nov 2022
@@ -19,7 +20,7 @@ $vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to be set for v
 $vrslcmDefaultAccount = "configadmin"
 $vrslcmDefaultAccountPassword = "VMware01!" #Password used for the default installation account for products
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
-$vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
+$vrslcmDcName = "my-vrslcm-dc" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
 $dns1 = "192.168.1.111"
@@ -27,10 +28,12 @@ $dns2 = "192.168.1.112"
 $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
+$installPSPack = $false
+$pspackfile = "Z:\VMware\Aria\vrlcm-8.14.0-PSPACK3.pspak"
 
 #Get Licence key from file or manually enter key below
 #$vrealizeLicense = "ABCDE-01234-FGHIJ-56789-KLMNO"
-$vrealizeLicense = Get-Content "Z:\homelab\Lics\vRealizeS2019Ent-license.txt"
+$vrealizeLicense = Get-Content "Z:\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
 # Set $importCert to $true to import your pre generated certs.
@@ -39,14 +42,14 @@ $vrealizeLicenseAlias = "vRealizeSuite2019"
 # If $importCert = $false is used, a wildcard certificate will be generated in vRSLCM
 $importCert = $true
 $replaceLCMCert = $true
-$PublicCertPath = "Z:\homelab\Certs\vrealize-2026-wildcard.pem"
-$PrivateCertPath = "Z:\homelab\Certs\Certs\vrealize-2026-wildcard-priv.pem"
+$PublicCertPath = "Z:\Certs\vrealize-2026-wildcard.pem"
+$PrivateCertPath = "Z:\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
 
 #vCenter Variables
 $vcenterHostname = "vcenter.domain.local"
 $vcenterUsername = "administrator@vsphere.local"
-$vcenterPassword = "VMware1!"
+$vcenterPassword = "VMware01!"
 $deployDatastore = "Datastore01" #vSphere Datastore to use for deployment
 $deployCluster = "datacenter#cluster" #vSphere Cluster - Notation <datacenter>#<cluster>. Example dc-mgmt#cls-mgmt
 $deployNetwork = "VM Network"
@@ -57,7 +60,7 @@ $ovaSourceType = "Local" # Local or NFS
 $ovaSourceLocation="/data" #
 $ovaFilepath = $ovaSourceLocation
 if ($ovaSourceType -eq "NFS"){
-    $ovaSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where ova files are stored.
+    $ovaSourceLocation="192.168.1.2:/ISO/Aria/latest" #NFS location where ova files are stored.
 	$ovaFilepath="/data/nfsfiles"
 }
 
@@ -65,7 +68,7 @@ if ($ovaSourceType -eq "NFS"){
 $deployVIDM = $true
 $vidmVmName = "vidm"
 $vidmHostname = $vidmVMName + "." + $domain
-$vidmIp = "192.168.1.113"
+$vidmIp = "192.168.1.130"
 $vidmVersion = "3.3.7"
 $vidmResize = $false #if set to $true, resizes VIDM to 2 vCPU 8GB RAM. Unsupported option for prod. works in lab.
 
@@ -73,7 +76,7 @@ $vidmResize = $false #if set to $true, resizes VIDM to 2 vCPU 8GB RAM. Unsupport
 $deployvRA = $true
 $vraVmName = "vra"
 $vraHostname = $vraVMName + "." + $domain
-$vraIp = "192.168.1.114"
+$vraIp = "192.168.1.140"
 $vraVersion = "8.14.1"
 
 ### END VARIABLES ###
