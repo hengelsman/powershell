@@ -1,65 +1,83 @@
 # Powershell script to configure Aria / vRealize Lifecycle (Manager) - vRSLCM
-# 
+#
 # Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
-# Check out the script vRSLCM-Config-Deploy-VIDM-vRA.ps1 for initial deployment, VIDM and vRA Deployment
+# # Check out the script vRSLCM-Config-Deploy-VIDM-vRA.ps1 for initial deployment, VIDM and vRA Deployment
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 21 Oct 2021
-# - Use of native json over powershell formatted json
-# - Import license from file
-# - dns/ntp bugfix
-# - renamed some variables
-# 27 Oct 2021
-# - bugfix Change vCenter Password to use Locker Password
-# Import-Module VMware.PowerCLI
-# 19 Nov 2021 - Updated for 8.6.1 release
-#
-# 22 Dec 2021 - Choose wether to deploy vRA or not
-# 29 Dec 2021 - Configure vRSLCM. Option to deploy vRA
-# 21 Jan 2023 - Minor Updates
-# 23 Jun 2023 - Cleanup code to only configure Aria / vRealize Suite Lifecycle (Manager). No Product Deployement option
+
 
 #################
 ### VARIABLES ###
 #################
-
-#vCenter Variables
-$vCenterHostname = "vcsamgmt.infrajedi.local"
-$vcenterUsername = "administrator@vsphere.local"
-$vCenterPassword = "VMware01!"
-$createSnapshot = $true
-
-#vRSLCM Variables
-$vrslcmVmname = "bvrslcm"
-$domain = "infrajedi.local"
+$vrslcmVmname = "vrslcm"
+$domain = "domain.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to be set for vRSLCM. default is vmware and needs to be changed at first login
+$vrslcmDefaultAccount = "configadmin"
+$vrslcmDefaultAccountPassword = "VMware01!" #Password used for the default installation account for products
+$vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
-$installPSPack = $true
-$pspackfile = "z:\VMware\vRealize\vRSLCM\vrlcm-8.12.0-PSPACK8.pspak"
-$dns1 = "172.16.1.11"
-$dns2 = "172.16.1.12"
+$vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
+$dns1 = "192.168.1.111"
+$dns2 = "192.168.1.112"
 $ntp1 = "192.168.1.1"
+$gateway = "192.168.1.1"
+$netmask = "255.255.255.0"
 
 #Get Licence key from file or manually enter key below
 #$vrealizeLicense = "ABCDE-01234-FGHIJ-56789-KLMNO"
-$vrealizeLicense = Get-Content "C:\Private\Homelab\Lics\vRealizeS2019Ent-license.txt"
+$vrealizeLicense = Get-Content "Z:\homelab\Lics\vRealizeS2019Ent-license.txt"
 $vrealizeLicenseAlias = "vRealizeSuite2019"
 
-# Set $importCert to $true to import your pre generated cert.
-# Note; only 1 certificate is imported (I created a wildcard cert)
-# If $false is selected, a wildcard certificate will be generated in vRSLCM
-# This certicate will also be used by LCM itself if selected.
+# Set $importCert to $true to import your pre generated certs.
+# I have used a wildcard cert here, which will be used for VIDM and vRA (not a best practice)
+# Configure the paths below to import your existing Certificates
+# If $importCert = $false is used, a wildcard certificate will be generated in vRSLCM
 $importCert = $true
 $replaceLCMCert = $true
-$PublicCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard.pem"
-$PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
+$PublicCertPath = "Z:\homelab\Certs\vrealize-2026-wildcard.pem"
+$PrivateCertPath = "Z:\homelab\Certs\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
+
+#vCenter Variables
+$vcenterHostname = "vcenter.domain.local"
+$vcenterUsername = "administrator@vsphere.local"
+$vcenterPassword = "VMware1!"
+$deployDatastore = "Datastore01" #vSphere Datastore to use for deployment
+$deployCluster = "datacenter#cluster" #vSphere Cluster - Notation <datacenter>#<cluster>. Example dc-mgmt#cls-mgmt
+$deployNetwork = "VM Network"
+$deployVmFolderName = "Aria" #vSphere VM Folder Name
+
+#OVA Variables
+$ovaSourceType = "Local" # Local or NFS
+$ovaSourceLocation="/data" #
+$ovaFilepath = $ovaSourceLocation
+if ($ovaSourceType -eq "NFS"){
+    $ovaSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where ova files are stored.
+	$ovaFilepath="/data/nfsfiles"
+}
+
+#VIDM Variables
+$deployVIDM = $true
+$vidmVmName = "vidm"
+$vidmHostname = $vidmVMName + "." + $domain
+$vidmIp = "192.168.1.113"
+$vidmVersion = "3.3.7"
+$vidmResize = $false #if set to $true, resizes VIDM to 2 vCPU 8GB RAM. Unsupported option for prod. works in lab.
+
+#vRA Variables
+$deployvRA = $true
+$vraVmName = "vra"
+$vraHostname = $vraVMName + "." + $domain
+$vraIp = "192.168.1.114"
+$vraVersion = "8.14.1"
+
+### END VARIABLES ###
 
 
 ### Start Skip Certificate Checks ###
@@ -88,6 +106,7 @@ if ($PSEdition -eq 'Desktop') {
     }
 }
 ### End Skip Certificate Checks ###
+
 
 ############################################################################
 ### Change intial vRSLCM admin password and create authentication header ###
@@ -118,6 +137,15 @@ $uri = "https://$vrslcmHostname/lcm/authzn/api/login" #Login
 Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 
 
+##############################################
+### Connect to vCenter to get VM Folder Id ###
+##############################################
+Connect-VIServer $vcenterHostname -User $vcenterUsername -Password $vcenterPassword
+$vmfolder = Get-Folder -Type VM -Name $deployVmFolderName
+#The Id has the notation Folder-group-<groupId>. For the JSON input we need to strip the first 7 characters
+$deployVmFolderId = $vmfolder.Id.Substring(7) +"(" + $deployVmFolderName + ")"
+
+
 ##############################
 ### CREATE LOCKER ACCOUNTS ###
 ##############################
@@ -126,14 +154,14 @@ Invoke-RestMethod -Uri $uri -Headers $header -Method Post -ErrorAction Stop
 $uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
 $data=@"
 {
-    "alias" : "$vCenterHostname",
-    "password" : "$vCenterPassword",
+    "alias" : "$vcenterHostname",
+    "password" : "$vcenterPassword",
     "passwordDescription" : "vCenter Admin password",
     "userName" : "$vcenterUsername"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add $data.passwordDescription to Locker" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -141,15 +169,35 @@ try {
     break
 }
 $vc_vmid = $response.vmid
-$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vCenterHostname" #note the escape characters
+$vcPasswordLockerEntry="locker`:password`:$vc_vmid`:$vcenterHostname" #note the escape characters
+
+# Create Default Installation account in Locker
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/passwords"
+$data=@"
+{
+    "alias" : "default",
+    "password" : "$vrslcmDefaultAccountPassword",
+    "passwordDescription" : "Default Product Password",
+    "userName" : "root"
+}
+"@
+try {
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
+    $response
+} catch {
+    write-host "Failed to add $data.passwordEscription to Locker" -ForegroundColor red
+    Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
+    Write-Host "StatusDescription:" $_.Exception.Response.StatusDescription
+    break
+}
+$dp_vmid = $response.vmid
+$defaultPasswordLockerEntry="locker`:password`:$dp_vmid`:default" ##note the escape characters
 
 
 #####################################
 ### Create Datacenter and vCenter ###
 #####################################
-
 # Create Datacenter
-$response =""
 $dcuri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters"
 $data =@"
 {
@@ -158,7 +206,7 @@ $data =@"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $dcuri -Headers $header -Body $data
     $response
 } catch {
     write-host "Failed to create datacenter $data.dataCenterName" -ForegroundColor red
@@ -170,7 +218,6 @@ $datacenterRequestId = $response.requestId
 $dc_vmid = $response.dataCenterVmid
 
 # Check Datacenter Creation Request
-$response =""
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$datacenterRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
@@ -189,19 +236,18 @@ $timer.Stop()
 Write-Host "Datacenter creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
 # Create vCenter
-$response =""
 $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/datacenters/$dc_vmid/vcenters"
 $data=@"
 {
-    "vCenterHost" : "$vCenterHostname",
-    "vCenterName" : "$vCenterHostname",
+    "vCenterHost" : "$vcenterHostname",
+    "vCenterName" : "$vcenterHostname",
     "vcPassword" : "$vcPasswordLockerEntry",
     "vcUsedAs" : "MANAGEMENT_AND_WORKLOAD",
     "vcUsername" : "$vcenterUsername"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add vCenter $data.vCenterHost" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -222,7 +268,7 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
     Write-Host "vCenter creation and validation Status" $response.state
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     if ($response.state -eq "FAILED"){
-        Write-Host "FAILED to add vCenter $vCenterHostname at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
+        Write-Host "FAILED to add vCenter $vcenterHostname at " (get-date -format HH:mm) -ForegroundColor White -BackgroundColor Red
         Break
     }
 }
@@ -261,7 +307,7 @@ $data = @"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add DNS Server $dns1" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -278,7 +324,7 @@ $data = @"
 }
 "@
 try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data 
+    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $data
 } catch {
     write-host "Failed to add DNS Server $dns2" -ForegroundColor red
     Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -310,7 +356,6 @@ try {
 $licenseRequestId = $response.requestId
 
 # Check License Creation Request
-$response =""
 $uri = "https://$vrslcmHostname/lcm/request/api/v2/requests/$licenseRequestId"
 $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
 $Timeout = 180
@@ -328,9 +373,15 @@ while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.state -e
 $timer.Stop()
 Write-Host "Licence creation and validation Status" $response.state -ForegroundColor Black -BackgroundColor Green
 
-#####################################################
-### Import existing, or generate new certificate  ###
-#####################################################
+# Get ID of imported License
+$uri = "https://$vrslcmHostname/lcm/locker/api/v2/licenses/alias/$vrealizeLicenseAlias"
+$response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
+$licenseId = $response.vmid
+$defaultLicenseLockerEntry="locker`:license`:$licenseId`:$vrealizeLicenseAlias" ##note the escape character
+
+#######################################################
+### Import existing certificate or generate new one ###
+#######################################################
 # Import existing certificate if $importCert is set to $true
 # Note the public certificate should have the complete certificate chain.
 if ($importCert -eq $true){
@@ -359,7 +410,6 @@ if ($importCert -eq $true){
     }
 
     # Get ID of imported Certificate
-    $response =""
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=$CertificateAlias"
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     $certificateId = $response.certificates.vmid
@@ -369,9 +419,9 @@ elseif ($importCert -eq $false) {
     #prep cert inputs derived from $domain and $vrslcmDcLocation variables
     $certo = $domain.Split(".")[0]
     $certoU = $domain.Split(".")[1]
-    $certi = ($vrslcmDcLocation.Split(",")[0]).trim()
-    $certst = ($vrslcmDcLocation.Split(",")[1]).trim()
-    $certc = ($vrslcmDcLocation.Split(",")[2]).trim()
+    $certi = ($vrslcmDcLocation.Split(";")[0]).trim()
+    $certst = ($vrslcmDcLocation.Split(";")[1]).trim()
+    $certc = ($vrslcmDcLocation.Split(";")[2]).trim()
     $certificateData = @"
     {
         "alias": "$CertificateAlias",
@@ -388,10 +438,9 @@ elseif ($importCert -eq $false) {
         ]
     }
 "@
-    $response =""
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates"
     try {
-        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData 
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $header -Body $certificateData
     } catch {
         write-host "Failed to create Standard Certificate $CertificateAlias" -ForegroundColor red
         Write-Host "StatusCode:" $_.Exception.Response.StatusCode.value__
@@ -399,19 +448,18 @@ elseif ($importCert -eq $false) {
         break
     }
     # Get ID of Generated Certificate
-    $response =""
     $uri = "https://$vrslcmHostname/lcm/locker/api/v2/certificates?aliasQuery=$CertificateAlias"
     $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
     $certificateId = $response.certificates.vmid
     }
-    #$CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias" ##note the escape character
+$CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias" ##note the escape character
 
 
 ################################################
 ### Replace Aria Suite Lifecycle Certificate ###
 ################################################
 
-if ($replaceLCMCert = $true){
+if ($replaceLCMCert -eq $true){
     $uri = "https://$vrslcmHostname/lcm/lcops/api/environments/lcm/products/lcm/updatecertificate"
     $body = @"
 {
@@ -455,17 +503,8 @@ if ($replaceLCMCert = $true){
 ### Import and Install PSPack ###
 #################################
 
-# Create Snapshot of vRSLCM VM
-Connect-VIServer $vCenterHostname -User $vcenterUsername -Password $vCenterPassword -WarningAction SilentlyContinue
-if ($createSnapshot -eq $true){
-    Write-Host "Create Snapshot before installing PSPack" -ForegroundColor White -BackgroundColor DarkGreen
-    New-Snapshot -VM $vrslcmVmname -Name "vRSLCM Pre PSPack Install Snapshot"
-}
-Disconnect-VIServer $vCenterHostname -Confirm:$false
-
-
 #Upload PSPACK##
-if ($installPSPack = $true) {
+if ($installPSPack -eq $true) {
     $form = @{
     file = get-item -path $pspackfile}
     $response =""
@@ -500,6 +539,7 @@ if ($installPSPack = $true) {
     # Install PSPack
     $uri = "https://$vrslcmHostname/lcm/lcops/api/v2/system-pspack/$pspackId"
     $pspackInstallResponse = Invoke-RestMethod -Method Post -Uri $uri -Headers $header
+    $pspackInstallResponse
     $pspackInstallRequestId = $pspackInstallResponse.requestId
 
     # Check PSPACK Install Progress
@@ -522,18 +562,3 @@ if ($installPSPack = $true) {
     Write-Host "PSPPack Install" (get-date -format HH:mm) $response.state -ForegroundColor Black -BackgroundColor Green
     }
 # END Install PSPack
-
-
-
-$uri = "https://$vrslcmHostname/lcm/health/api/v2/status"
-    Write-Host "Waiting for vRSLCM Services"
-    $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-    $Timeout = 900
-    $timer = [Diagnostics.Stopwatch]::StartNew()
-    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not ($response.'vrlcm-server' -eq "UP"))) {
-        Start-Sleep -Seconds 60
-        Write-Host "vRSLCM Server Status at " (get-date -format HH:mm) $response.'vrlcm-server'
-        $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $header
-    }
-    $timer.Stop()
-    Write-Host "vRSLCM Server Status" (get-date -format HH:mm) $response.'vrlcm-server' -ForegroundColor Black -BackgroundColor Green

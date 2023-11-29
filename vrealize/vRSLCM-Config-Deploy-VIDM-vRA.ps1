@@ -1,47 +1,29 @@
 # Powershell script to configure Aria / vRealize Lifecycle (Manager) - vRSLCM, deploy single node vidm and optionally deploy vRA.
 #
-# Check out the script vRSLCM-Deployment.ps1 for initial deployment and OVA distribution
-# # Check out the script vRSLCM-Config-Deploy-VIDM-vRA.ps1 for initial deployment, VIDM and vRA Deployment
 # vRSLCM API Browserver - https://code.vmware.com/apis/1161/vrealize-suite-lifecycle-manager
 # vRSLCM API Documentation - https://vdc-download.vmware.com/vmwb-repository/dcr-public/9326d555-f77f-456d-8d8a-095aa4976267/c98dabed-ee9a-42ca-87c7-f859698730d1/vRSLCM-REST-Public-API-for-8.4.0.pdf
 # JSON specs to deploy vRealize Suite Products using vRealize Suite LifeCycle Manager 8.0 https://kb.vmware.com/s/article/75255 
 #
 # Henk Engelsman - https://www.vtam.nl
-# 21 Oct 2021
-# - Use of native json over powershell formatted json
-# - Import license from file
-# - dns/ntp bugfix
-# - renamed some variables
-# 27 Oct 2021 - bugfix Change vCenter Password to use Locker Password
-# 19 Nov 2021 - Updated for 8.6.1 release
-# 22 Dec 2021 - Choose wether to deploy vRA or not
-# 29 Dec 2021 - Configure vRSLCM. Deploy VIDM. Option to deploy vRA
-# 19 Jan 2022 - 8.6.2 Upgrade. Moved resize VIDM resources to end.
-# 22 Mar 2022 - 8.7 - Choice to import OVAs from NFS or vRSLCM appliance.
-# 23 Mar 2022 - 8.7 - Small update to add DcLocation Coordinates
-# 11 Apr 2022 - fix issue with generatad cert because of 23 Mar change.
-# 07 okt 2022 - 8.10 Update
-# 21 Jan 2022 - Minor Updates
-# 26 Apr 2023 - 8.12 Changes
-# 23 Jun 2023 - Cleanup code
-# 08 Sep 2023 - Renamed vcenter variables.
+# 29 Nov 2022
+
 
 #################
 ### VARIABLES ###
 #################
-$vrslcmVmname = "bvrslcm"
-$domain = "infrajedi.local"
+$vrslcmVmname = "vrslcm"
+$domain = "domain.local"
 $vrslcmHostname = $vrslcmVmname + "." + $domain #joins vmname and domain to generate fqdn
 $vrslcmUsername = "admin@local" #the default admin account for vRSLCM web interface
-$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to set
+$vrslcmAdminPassword = "VMware01!" #the NEW admin@local password to be set for vRSLCM. default is vmware and needs to be changed at first login
 $vrslcmDefaultAccount = "configadmin"
-$vrslcmDefaultAccountPassword = "VMware01!"
+$vrslcmDefaultAccountPassword = "VMware01!" #Password used for the default installation account for products
 $vrslcmAdminEmail = $vrslcmDefaultAccount + "@" + $domain 
 $vrslcmDcName = "dc-mgmt" #vRSLCM Datacenter Name
 $vrslcmDcLocation = "Rotterdam;South Holland;NL;51.9225;4.47917" # You have to put in the coordinates to make this work
 $vrslcmProdEnv = "Aria" #Name of the vRSLCM Environment where vRA is deployed
-$dns1 = "172.16.1.11"
-$dns2 = "172.16.1.12"
+$dns1 = "192.168.1.111"
+$dns2 = "192.168.1.112"
 $ntp1 = "192.168.1.1"
 $gateway = "192.168.1.1"
 $netmask = "255.255.255.0"
@@ -54,21 +36,21 @@ $vrealizeLicenseAlias = "vRealizeSuite2019"
 # Set $importCert to $true to import your pre generated certs.
 # I have used a wildcard cert here, which will be used for VIDM and vRA (not a best practice)
 # Configure the paths below to import your existing Certificates
-# If $false is selected, a wildcard certificate will be generated in vRSLCM
+# If $importCert = $false is used, a wildcard certificate will be generated in vRSLCM
 $importCert = $true
 $replaceLCMCert = $true
-$PublicCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard.pem"
-$PrivateCertPath = "C:\Private\Homelab\Certs\vrealize-2026-wildcard-priv.pem"
+$PublicCertPath = "Z:\homelab\Certs\vrealize-2026-wildcard.pem"
+$PrivateCertPath = "Z:\homelab\Certs\Certs\vrealize-2026-wildcard-priv.pem"
 $CertificateAlias = "vRealizeCertificate"
 
 #vCenter Variables
-$vcenterHostname = "vcsamgmt.infrajedi.local"
+$vcenterHostname = "vcenter.domain.local"
 $vcenterUsername = "administrator@vsphere.local"
-$vcenterPassword = "VMware01!"
-$deployDatastore = "DS02-870EVO" #vSphere Datastore to use for deployment
-$deployCluster = "dc-mgmt#cls-mgmt" #vSphere Cluster - Notation <datacenter>#<cluster>
-$deployNetwork = "VMNet1"
-$deployVmFolderName = "vRealize-Beta" #vSphere VM Folder Name
+$vcenterPassword = "VMware1!"
+$deployDatastore = "Datastore01" #vSphere Datastore to use for deployment
+$deployCluster = "datacenter#cluster" #vSphere Cluster - Notation <datacenter>#<cluster>. Example dc-mgmt#cls-mgmt
+$deployNetwork = "VM Network"
+$deployVmFolderName = "Aria" #vSphere VM Folder Name
 
 #OVA Variables
 $ovaSourceType = "Local" # Local or NFS
@@ -78,22 +60,21 @@ if ($ovaSourceType -eq "NFS"){
     $ovaSourceLocation="192.168.1.20:/ISO/VMware/vRealize/latest" #NFS location where ova files are stored.
 	$ovaFilepath="/data/nfsfiles"
 }
-#write-host "value: $OVASourceType $ovaFilepath $OVASourceLocation"
 
 #VIDM Variables
 $deployVIDM = $true
-$vidmVmName = "bvidm"
+$vidmVmName = "vidm"
 $vidmHostname = $vidmVMName + "." + $domain
-$vidmIp = "192.168.1.182"
+$vidmIp = "192.168.1.113"
 $vidmVersion = "3.3.7"
-$vidmResize = $true #Note: Doing before vRA deployment will fail vRA deployment
+$vidmResize = $false #if set to $true, resizes VIDM to 2 vCPU 8GB RAM. Unsupported option for prod. works in lab.
 
 #vRA Variables
 $deployvRA = $true
-$vraVmName = "bvra"
+$vraVmName = "vra"
 $vraHostname = $vraVMName + "." + $domain
-$vraIp = "192.168.1.185"
-$vraVersion = "8.12.0"
+$vraIp = "192.168.1.114"
+$vraVersion = "8.14.1"
 
 ### END VARIABLES ###
 
@@ -477,7 +458,7 @@ $CertificateLockerEntry="locker`:certificate`:$certificateId`:$CertificateAlias"
 ### Replace Aria Suite Lifecycle Certificate ###
 ################################################
 
-if ($replaceLCMCert = $true){
+if ($replaceLCMCert -eq $true){
     $uri = "https://$vrslcmHostname/lcm/lcops/api/environments/lcm/products/lcm/updatecertificate"
     $body = @"
 {
@@ -522,7 +503,7 @@ if ($replaceLCMCert = $true){
 #################################
 
 #Upload PSPACK##
-if ($installPSPack = $true) {
+if ($installPSPack -eq $true) {
     $form = @{
     file = get-item -path $pspackfile}
     $response =""
